@@ -89,9 +89,11 @@ Required:
 | Asset | Pixel size | Notes |
 |---|---|---|
 | Store icon | 128 × 128 | `public/icons/icon-128.png` — already the right size. |
-| At least 1 screenshot | 1280 × 800 or 640 × 400 | Use `docs/screenshots/dashboard-card-light.png` + pad to 1280×800 in any image editor, OR take a full-page shot with `page.screenshot({ fullPage: true })` at 1280 × 800 viewport. |
+| Screenshot(s), min 1, max 5 | **1280 × 800** exact | Pre-built: `docs/screenshots/store-market-1280x800.png`, `store-dashboard-1280x800.png`, `store-market-dark-1280x800.png`, `store-dashboard-dark-1280x800.png`. Regenerate anytime with `pnpm screenshots`. |
 | Small promo tile (optional) | 440 × 280 | Marketing — one-sentence tagline over the butterfly. |
 | Marquee (optional) | 1400 × 560 | Only if Chrome features you; skip for a first submission. |
+
+The four pre-built store shots cover: market page Lend tab (light + dark) and dashboard with Market Lending card (light + dark). All four render at the exact `1280 × 800` Chrome expects — no padding needed. Upload in that order; Chrome shows them in a carousel in the listing.
 
 Keep all screenshots free of real wallet addresses / balances. The generator already mocks the GraphQL response so no real on-chain data leaks.
 

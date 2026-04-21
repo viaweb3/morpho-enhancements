@@ -172,6 +172,160 @@ test('shot: dashboard market lending card (light)', async () => {
   await card.screenshot({ path: join(OUT_DIR, 'dashboard-card-light.png') });
 });
 
+// ------------------------------------------------------------
+// Chrome Web Store listing images (1280x800 exact, required size).
+// Separate context at the exact viewport so the screenshot is the right
+// dimension without any post-processing. Still mocks positions so no real
+// data leaks into a public store listing.
+// ------------------------------------------------------------
+
+test.describe('store images (1280x800)', () => {
+  let storeCtx: BrowserContext;
+  let storeDir: string;
+
+  test.beforeAll(async () => {
+    storeDir = mkdtempSync(join(tmpdir(), 'morpho-shots-store-'));
+    storeCtx = await chromium.launchPersistentContext(storeDir, {
+      headless: false,
+      viewport: { width: 1280, height: 800 },
+      args: [
+        `--disable-extensions-except=${EXT_PATH}`,
+        `--load-extension=${EXT_PATH}`,
+        '--no-first-run',
+        '--no-default-browser-check',
+      ],
+    });
+  });
+
+  test.afterAll(async () => {
+    await storeCtx?.close();
+    if (storeDir) rmSync(storeDir, { recursive: true, force: true });
+  });
+
+  test('store: market page with Lend tab active', async () => {
+    const page = await storeCtx.newPage();
+    await page.goto(MARKET_URL);
+    await page.waitForSelector('[data-testid="market-action-panel"]', { timeout: 45_000 });
+    const lendTab = page.locator('[data-testid="market-action-panel"] .mx-tab', {
+      hasText: 'Lend',
+    });
+    await lendTab.waitFor({ timeout: 15_000 });
+    await lendTab.click();
+    // Let panel populate (RPC reads for ERC20 meta + allowance)
+    await page.waitForTimeout(4000);
+    // Hide Morpho's intercom bubble so it doesn't dominate the corner.
+    await page.addStyleTag({
+      content: '#intercom-container,.intercom-launcher,[class*="intercom"]{display:none !important;}',
+    });
+    await page.screenshot({
+      path: join(OUT_DIR, 'store-market-1280x800.png'),
+      // viewport-only, not fullPage — store wants exact dimensions
+    });
+  });
+
+  test('store: dashboard with Market Lending card', async () => {
+    const page = await storeCtx.newPage();
+    await mockPositions(page);
+    await page.goto(DASHBOARD_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    await page.waitForSelector('[data-morpho-ext-mount="morpho-ext-dashboard-supply"]', {
+      timeout: 20_000,
+    });
+    await page.waitForFunction(() => {
+      const host = document.querySelector(
+        '[data-morpho-ext-mount="morpho-ext-dashboard-supply"]',
+      );
+      const sr = (host as HTMLElement | null)?.shadowRoot;
+      return !!(sr && /1,234\.56|USDC/.test(sr.textContent ?? ''));
+    }, null, { timeout: 20_000 });
+    await page.waitForTimeout(1500);
+    // Hide the empty Positions/Activity tab strip — it's a sticky element
+    // that would otherwise overlap the Market Lending heading when we
+    // scroll our card into view.
+    await page.addStyleTag({
+      content: '[data-testid="tab-positions"],[data-testid="tab-activity"]{display:none !important;} main [class*="css-1xe81xy"],main [class*="e6ja7zi"]{display:none !important;}',
+    });
+    // Bring the Market Lending heading near the top with some breathing room
+    // below Morpho's fixed top navbar.
+    await page.evaluate(() => {
+      const host = document.querySelector(
+        '[data-morpho-ext-mount="morpho-ext-dashboard-supply"]',
+      );
+      (host as HTMLElement | null)?.scrollIntoView({ block: 'start' });
+      window.scrollBy(0, -90);
+    });
+    await page.addStyleTag({
+      content: '#intercom-container,.intercom-launcher,[class*="intercom"]{display:none !important;}',
+    });
+    await page.waitForTimeout(500);
+    await page.screenshot({
+      path: join(OUT_DIR, 'store-dashboard-1280x800.png'),
+    });
+  });
+
+  test('store: dashboard with Market Lending card (dark)', async () => {
+    const page = await storeCtx.newPage();
+    await mockPositions(page);
+    await page.addInitScript(() => {
+      try { localStorage.setItem('theme', 'dark'); } catch { /* ignore */ }
+      const dark = () => document.documentElement.classList.add('dark');
+      if (document.documentElement) dark();
+      document.addEventListener('DOMContentLoaded', dark);
+    });
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.goto(DASHBOARD_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    await page.waitForSelector('[data-morpho-ext-mount="morpho-ext-dashboard-supply"]', {
+      timeout: 20_000,
+    });
+    await page.waitForFunction(() => {
+      const host = document.querySelector(
+        '[data-morpho-ext-mount="morpho-ext-dashboard-supply"]',
+      );
+      const sr = (host as HTMLElement | null)?.shadowRoot;
+      return !!(sr && /1,234\.56|USDC/.test(sr.textContent ?? ''));
+    }, null, { timeout: 20_000 });
+    await page.waitForTimeout(1500);
+    await page.addStyleTag({
+      content: '[data-testid="tab-positions"],[data-testid="tab-activity"]{display:none !important;} main [class*="css-1xe81xy"],main [class*="e6ja7zi"]{display:none !important;} #intercom-container,.intercom-launcher,[class*="intercom"]{display:none !important;}',
+    });
+    await page.evaluate(() => {
+      const host = document.querySelector(
+        '[data-morpho-ext-mount="morpho-ext-dashboard-supply"]',
+      );
+      (host as HTMLElement | null)?.scrollIntoView({ block: 'start' });
+      window.scrollBy(0, -90);
+    });
+    await page.waitForTimeout(500);
+    await page.screenshot({
+      path: join(OUT_DIR, 'store-dashboard-dark-1280x800.png'),
+    });
+  });
+
+  test('store: market page with Lend tab active (dark)', async () => {
+    const page = await storeCtx.newPage();
+    await page.addInitScript(() => {
+      try { localStorage.setItem('theme', 'dark'); } catch { /* ignore */ }
+      const dark = () => document.documentElement.classList.add('dark');
+      if (document.documentElement) dark();
+      document.addEventListener('DOMContentLoaded', dark);
+    });
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.goto(MARKET_URL);
+    await page.waitForSelector('[data-testid="market-action-panel"]', { timeout: 45_000 });
+    const lendTab = page.locator('[data-testid="market-action-panel"] .mx-tab', {
+      hasText: 'Lend',
+    });
+    await lendTab.waitFor({ timeout: 15_000 });
+    await lendTab.click();
+    await page.waitForTimeout(4000);
+    await page.addStyleTag({
+      content: '#intercom-container,.intercom-launcher,[class*="intercom"]{display:none !important;}',
+    });
+    await page.screenshot({
+      path: join(OUT_DIR, 'store-market-dark-1280x800.png'),
+    });
+  });
+});
+
 test('shot: dashboard market lending card (dark)', async () => {
   const page = await ctx.newPage();
   await mockPositions(page);
