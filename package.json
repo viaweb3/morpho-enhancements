@@ -1,0 +1,38 @@
+{
+  "name": "morpho-enhancements",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chrome extension adding market-level Supply and dashboard supply positions to app.morpho.org",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "probe": "playwright test tests/probe/probe.spec.ts --reporter=list",
+    "test:e2e": "playwright test tests/e2e/extension.spec.ts",
+    "screenshots": "playwright test tests/e2e/screenshots.spec.ts",
+    "typecheck": "tsc --noEmit",
+    "package": "pnpm build && node scripts/package-zip.mjs"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "viem": "^2.29.0"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "2.0.0-beta.29",
+    "@playwright/test": "^1.49.0",
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/chrome": "^0.0.287",
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
