@@ -176,3 +176,4 @@ See [`docs/PUBLISHING.md`](docs/PUBLISHING.md) for the Chrome Web Store submissi
 MIT — see [LICENSE](LICENSE).
 
 This project is not affiliated with Morpho Labs. "Morpho" and the Morpho butterfly mark are trademarks of their respective owners; the base logo file (`scripts/morpho-base.svg`) is served by Morpho's public CDN.
+
