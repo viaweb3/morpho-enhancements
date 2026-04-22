@@ -1,0 +1,91 @@
+name: check-translations
+
+# Fails the build when README.md changes without a matching update to
+# every translation. Translations can change freely on their own (typo
+# fixes, wording polish) — the gate only fires in the English →
+# translations direction.
+#
+# Bypass: include `[skip-i18n]` anywhere in any commit message in the
+# pushed range (or PR commits) to disable the check for that push.
+
+on:
+  pull_request:
+    paths:
+      - 'README.md'
+      - 'README.*.md'
+  push:
+    branches: [main]
+    paths:
+      - 'README.md'
+      - 'README.*.md'
+
+permissions:
+  contents: read
+
+jobs:
+  translations-in-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # Need history on both sides of the diff. fetch-depth: 0 is
+          # slow on huge repos but fine here.
+          fetch-depth: 0
+
+      - name: Compare changed README files
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            BASE="$PR_BASE"
+            HEAD="$PR_HEAD"
+          else
+            BASE="$PUSH_BEFORE"
+            HEAD="$PUSH_AFTER"
+          fi
+
+          # Branch's first push: `before` is all zeros. Nothing to diff against.
+          if [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            echo "Initial push — skipping translation sync check."
+            exit 0
+          fi
+
+          echo "Diff range: $BASE..$HEAD"
+
+          CHANGED="$(git diff --name-only "$BASE" "$HEAD" -- 'README*.md' || true)"
+          echo "Changed README files:"
+          echo "${CHANGED:-<none>}"
+
+          # Bypass if any commit in the range carries [skip-i18n].
+          if git log --format=%B "$BASE..$HEAD" | grep -Fq '[skip-i18n]'; then
+            echo "Found [skip-i18n] in commit range — skipping translation sync check."
+            exit 0
+          fi
+
+          TRANSLATIONS="README.zh-CN.md README.ja.md README.ko.md README.ru.md README.es.md"
+
+          if echo "$CHANGED" | grep -qx "README.md"; then
+            missing=""
+            for t in $TRANSLATIONS; do
+              if ! echo "$CHANGED" | grep -qx "$t"; then
+                missing="$missing $t"
+              fi
+            done
+            if [ -n "$missing" ]; then
+              echo "::error title=README translations out of sync::README.md changed but these translations did not:$missing"
+              echo ""
+              echo "Update each translation so it matches the English changes,"
+              echo "or add [skip-i18n] to a commit message if this change genuinely"
+              echo "doesn't need to be mirrored (e.g. pure reference fixes)."
+              exit 1
+            fi
+          fi
+
+          echo "✓ README translations are in sync."

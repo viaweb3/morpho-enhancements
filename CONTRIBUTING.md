@@ -29,6 +29,21 @@ Reload the built extension in Chrome: `chrome://extensions` → toggle off + on.
 3. **Screenshots re-generated if UI changed**: `pnpm exec playwright test tests/e2e/screenshots.spec.ts`. Commit only if the visual change is intentional.
 4. **Manifest version bumped** if the change is user-visible (both `package.json` and `src/manifest.config.ts`).
 5. **No real wallet data in commits** — check screenshots, test fixtures, and debug logs.
+6. **README translations updated**: the README ships in 6 languages. CI fails any push that edits `README.md` without also editing every `README.<locale>.md` (see below).
+
+## README translations
+
+The project ships 5 translations alongside the English source:
+
+- `README.zh-CN.md`
+- `README.ja.md`
+- `README.ko.md`
+- `README.ru.md`
+- `README.es.md`
+
+A CI check (`.github/workflows/check-translations.yml`) fails any push or PR that modifies `README.md` without also modifying every translation. Translations can change independently (typo fixes, wording polish) — the gate only fires in the English → translations direction.
+
+If a change genuinely doesn't need to be mirrored (e.g. a reference-only fix), include `[skip-i18n]` in a commit message in the push to disable the check for that push only.
 
 ## Areas that would actually help
 
