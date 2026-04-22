@@ -161,6 +161,9 @@ export const ERC20_ABI = [
     outputs: [{ type: 'uint256' }],
   },
   {
+    // USDT and other non-standard tokens return no data from approve,
+    // so decoding a declared bool return fails with `returned no data ("0x")`.
+    // Declaring no outputs works for both standard and non-standard ERC-20s.
     type: 'function',
     name: 'approve',
     stateMutability: 'nonpayable',
@@ -168,7 +171,7 @@ export const ERC20_ABI = [
       { name: 'spender', type: 'address' },
       { name: 'value', type: 'uint256' },
     ],
-    outputs: [{ type: 'bool' }],
+    outputs: [],
   },
 ] as const;
 
