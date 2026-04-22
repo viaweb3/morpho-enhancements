@@ -3,6 +3,8 @@ import { SUPPORTED_SLUGS as SLUG_LIST, type SupportedChainSlug } from './chains'
 export type RouteMatch =
   | { kind: 'market'; chainSlug: SupportedChainSlug; marketId: `0x${string}`; pairSlug: string }
   | { kind: 'dashboard'; address: `0x${string}` }
+  | { kind: 'markets-list' }
+  | { kind: 'vaults-list' }
   | { kind: 'other' };
 
 const SUPPORTED_SLUGS = new Set<SupportedChainSlug>(SLUG_LIST);
@@ -33,5 +35,8 @@ export function matchRoute(pathname: string): RouteMatch {
   if (parts.length >= 2 && parts[0] === 'dashboard' && HEX_ADDRESS.test(parts[1])) {
     return { kind: 'dashboard', address: parts[1] as `0x${string}` };
   }
+  // /markets or /vaults (root list pages)
+  if (parts.length === 1 && parts[0] === 'markets') return { kind: 'markets-list' };
+  if (parts.length === 1 && parts[0] === 'vaults') return { kind: 'vaults-list' };
   return { kind: 'other' };
 }

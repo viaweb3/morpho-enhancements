@@ -91,3 +91,94 @@ test('probe dashboard page', async ({ page }) => {
   await page.goto(DASHBOARD_URL);
   await dump(page, 'dashboard');
 });
+
+async function dumpList(
+  page: import('@playwright/test').Page,
+  name: string,
+  linkPattern: RegExp,
+) {
+  await page.waitForLoadState('networkidle', { timeout: 60_000 }).catch(() => {});
+  await page.waitForTimeout(6_000);
+  await page.screenshot({ path: join(OUT, `${name}.png`), fullPage: true });
+
+  const report = await page.evaluate((pattern: string) => {
+    const re = new RegExp(pattern);
+    const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]'))
+      .filter((a) => re.test(a.getAttribute('href') || ''))
+      .slice(0, 8);
+
+    function pathOf(el: Element | null): string {
+      const parts: string[] = [];
+      let cur: Element | null = el;
+      while (cur && parts.length < 10) {
+        const tid = cur.getAttribute?.('data-testid');
+        const tag = cur.tagName.toLowerCase();
+        parts.unshift(`${tag}${tid ? `[data-testid="${tid}"]` : ''}`);
+        cur = cur.parentElement;
+      }
+      return parts.join(' > ');
+    }
+
+    return {
+      url: location.href,
+      totalLinks: links.length,
+      rows: links.map((a) => {
+        // Find the closest likely "row" ancestor (tr, li, or div with similar siblings)
+        let row: HTMLElement = a;
+        let cur: HTMLElement | null = a;
+        for (let i = 0; i < 10 && cur; i++) {
+          if (cur.tagName === 'TR' || cur.tagName === 'LI') {
+            row = cur;
+            break;
+          }
+          if (cur.parentElement && cur.parentElement.children.length > 3) {
+            row = cur;
+          }
+          cur = cur.parentElement;
+        }
+        const rect = row.getBoundingClientRect();
+        return {
+          href: a.getAttribute('href'),
+          anchorTag: a.tagName.toLowerCase(),
+          rowTag: row.tagName.toLowerCase(),
+          rowTestId: row.getAttribute('data-testid'),
+          rowClass: (row.className || '').toString().slice(0, 200),
+          rowPath: pathOf(row),
+          text: (row.innerText || '').slice(0, 150).replace(/\s+/g, ' ').trim(),
+          rect: { w: Math.round(rect.width), h: Math.round(rect.height) },
+          childCount: row.children.length,
+          siblingCount: row.parentElement?.children.length ?? 0,
+        };
+      }),
+      filterBarCandidates: Array.from(document.querySelectorAll<HTMLElement>('input[type="search"], input[placeholder*="Search" i], [role="search"], [data-testid*="filter" i], [data-testid*="search" i]'))
+        .slice(0, 10)
+        .map((el) => ({
+          tag: el.tagName.toLowerCase(),
+          testid: el.getAttribute('data-testid'),
+          role: el.getAttribute('role'),
+          placeholder: el.getAttribute('placeholder'),
+          path: pathOf(el),
+        })),
+    };
+  }, linkPattern.source);
+
+  writeFileSync(join(OUT, `${name}.json`), JSON.stringify(report, null, 2));
+
+  const html = await page.evaluate(() => {
+    const main = document.querySelector('main') || document.body;
+    const clone = main.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll('script,style,noscript,svg').forEach((n) => n.remove());
+    return clone.outerHTML.slice(0, 400_000);
+  });
+  writeFileSync(join(OUT, `${name}.html`), html);
+}
+
+test('probe markets list', async ({ page }) => {
+  await page.goto('https://app.morpho.org/markets');
+  await dumpList(page, 'markets-list', /\/market\//);
+});
+
+test('probe vaults list', async ({ page }) => {
+  await page.goto('https://app.morpho.org/vaults');
+  await dumpList(page, 'vaults-list', /\/vault\//);
+});

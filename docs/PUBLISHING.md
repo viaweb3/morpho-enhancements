@@ -50,16 +50,18 @@ zip -d morpho-enhancements-<version>.zip '*.map'
 
 ### Summary (short)
 Up to 132 chars. Suggested:
-> Adds Supply / Withdraw on Morpho Blue market pages and a Market Lending card on your dashboard — all chains, native wallet.
+> Supply / Withdraw on Morpho Blue markets, a multi-chain Market Lending dashboard card, and Favorites on market & vault lists.
 
 ### Description
 Long form (up to ~16,000 chars). A usable draft:
 
-> Morpho Enhancements adds two things to app.morpho.org:
+> Morpho Enhancements adds three things to app.morpho.org:
 >
 > • **Market-level Supply & Withdraw** — every Morpho Blue market page gets a Lend tab next to Borrow. Deposit the loan asset directly into a specific market (not just a vault) to earn market-specific interest, and withdraw in the same UI.
 >
 > • **Dashboard visibility** — your direct-market lending positions show up on the dashboard, across every chain Morpho supports: Ethereum, Base, Arbitrum, Optimism, Polygon, Unichain, Monad, World Chain, Katana, HyperEVM.
+>
+> • **Favorites on /markets and /vaults** — star any row; a Favorites-only chip filters the list down to just your picks. Kept in your browser only, works across tabs.
 >
 > The extension reuses the wallet you've already connected to Morpho — no separate connect flow. When the loan asset is the chain's wrapped-native token (WETH, WPOL, WMON, WHYPE), a small toggle lets you pay with the native currency and auto-wraps in the background.
 >

@@ -1,10 +1,12 @@
 # Morpho Enhancements
 
-A Chrome extension that fills two gaps in [app.morpho.org](https://app.morpho.org):
+A Chrome extension that fills three gaps in [app.morpho.org](https://app.morpho.org):
 
 1. **Market-level Supply & Withdraw** — on any Morpho Blue market page, the official UI offers Borrow only. This extension injects a **Lend** tab next to Borrow that deposits the loan asset directly into the market (same `Morpho.supply()` call vaults use internally) and lets you withdraw later — so you can earn market-specific lending interest without going through a MetaMorpho vault.
 
 2. **Dashboard visibility** — the dashboard lists vault deposits and borrow positions, but not direct-market supplies. This extension adds a **Market Lending** card that shows every market where the user is a direct lender, across every chain Morpho supports, with USD value, APY, and a shortcut back to the market page.
+
+3. **Favorites** on `/markets` and `/vaults` — star any row, then toggle a **Favorites only** chip to filter the list down to the handful you actually care about. Favorites persist in-browser and sync across tabs.
 
 <p align="center">
   <img src="docs/screenshots/market-lend-light.png" width="360" alt="Market page — Lend tab (light)">
@@ -19,6 +21,14 @@ A Chrome extension that fills two gaps in [app.morpho.org](https://app.morpho.or
   <img src="docs/screenshots/dashboard-card-dark.png" width="720" alt="Dashboard — Market Lending card (dark)">
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/favorites-markets-light.png" width="720" alt="Markets list — stars on each row, Favorites chip (light)">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/favorites-markets-filtered-light.png" width="720" alt="Markets list filtered to favorites (light)">
+</p>
+
 > Screenshots use mocked position data. Real balances, addresses, and market hashes are never part of published images.
 
 ## Features
@@ -26,7 +36,9 @@ A Chrome extension that fills two gaps in [app.morpho.org](https://app.morpho.or
 - **Borrow | Lend tabs** on the market panel. Clicking Lend swaps the native form for a supply / withdraw UI that matches Morpho's visual language in both light and dark mode.
 - **ETH / WETH wrap toggle** when the loan asset is the chain's wrapped-native token. Pay with native ETH (or POL on Polygon, MON on Monad, HYPE on HyperEVM) — the extension auto-wraps before supply and auto-unwraps after withdraw. Two signatures total; no separate wrap UX trip.
 - **10-chain dashboard** — Market Lending card queries all Morpho-supported chains in one request: Ethereum, Base, Arbitrum, Optimism, Polygon, Unichain, Monad, World Chain, Katana, HyperEVM.
+- **Favorites on list pages** — star markets and vaults in `/markets` and `/vaults`, then filter the table down to just your picks with a one-click chip. Stored in `localStorage` only (no server, no tracking); works offline and syncs across tabs.
 - **Reuses the page's wallet** — no second connect flow. Works with MetaMask, Rabby, Frame, Coinbase Wallet, and any EIP-6963–compliant injection.
+- **Non-standard ERC-20 support** — USDT (and other tokens whose `approve` returns no data) work out of the box; the approve ABI is declared with no outputs so viem's simulation doesn't fail on `0x`.
 - **Humanized errors** — rejecting a signature silently returns to idle. Insufficient balance, wrong network, stuck nonce, and revert reasons become short sentences instead of a 2 KB viem dump.
 - **No analytics, no telemetry, no hosted backend** — direct calls to the Morpho Blue contract via public RPCs, plus Morpho's own blue-api for APY/USD figures.
 
@@ -90,13 +102,15 @@ src/
 │   ├── main.ts               # ISOLATED world — SPA route watcher + mount dispatcher
 │   ├── mount.ts              # Shadow DOM host + React root + theme sync
 │   ├── router.ts             # pushState/replaceState → locationchange event
-│   └── marketIntegration.ts  # Borrow | Lend tab injection on the market panel
+│   ├── marketIntegration.ts  # Borrow | Lend tab injection on the market panel
+│   └── listsIntegration.ts   # Favorites star + filter chip on /markets and /vaults
 ├── lib/
 │   ├── morpho.ts             # viem public client + Morpho contract helpers
 │   ├── morphoAbi.ts          # IMorpho + ERC20 + WETH9 ABIs
 │   ├── sharesMath.ts         # SharesMathLib port (virtual shares/assets)
 │   ├── chains.ts             # Slug ↔ chain ID, wrapped-native, RPC fallback list
-│   ├── url.ts                # Route matcher (market / dashboard / other)
+│   ├── url.ts                # Route matcher (market / dashboard / list / other)
+│   ├── favorites.ts          # localStorage-backed favorites store
 │   ├── graphql.ts            # blue-api client
 │   └── pageProvider.ts       # Bridge client + viem WalletClient adapter
 ├── ui/

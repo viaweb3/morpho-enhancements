@@ -14,6 +14,8 @@ const OUT_DIR = join(__dirname, '..', '..', 'docs', 'screenshots');
 
 const MARKET_URL =
   'https://app.morpho.org/ethereum/market/0xa921ef34e2fc7a27ccc50ae7e4b154e16c9799d3387076c421423ef52ac4df99/wbtc-usdt';
+const MARKETS_LIST_URL = 'https://app.morpho.org/markets';
+const VAULTS_LIST_URL = 'https://app.morpho.org/vaults';
 // A deterministic demo address — the actual value doesn't matter because
 // the API response is mocked. Using 0xdead…beef makes it obvious in any
 // leftover UI chrome that this is a demo screenshot.
@@ -349,4 +351,179 @@ test('shot: dashboard market lending card (dark)', async () => {
 
   const card = page.locator('[data-morpho-ext-mount="morpho-ext-dashboard-supply"]');
   await card.screenshot({ path: join(OUT_DIR, 'dashboard-card-dark.png') });
+});
+
+// ------------------------------------------------------------
+// Favorites feature screenshots. We star a few rows in-browser, then
+// capture both the "all rows with stars" and "favorites-only" views.
+// ------------------------------------------------------------
+
+// Seed localStorage with N pre-starred rows before the real screenshot:
+// 1) goto once just to discover the first N row keys,
+// 2) write them to localStorage,
+// 3) reload so the extension marks those rows "on" on first render.
+// This avoids clicking stars in a loop, which tends to trigger Morpho's
+// table to re-fetch and blank out during screenshots.
+async function seedFavoritesFromList(
+  page: Page,
+  url: string,
+  n: number,
+): Promise<string[]> {
+  await page.goto(url);
+  await page.waitForSelector('tbody tr[data-morpho-ext-fav-key]', { timeout: 30_000 });
+  const keys = await page
+    .locator('tbody tr[data-morpho-ext-fav-key]')
+    .evaluateAll((els, count) =>
+      els
+        .slice(0, count as number)
+        .map((el) => el.getAttribute('data-morpho-ext-fav-key'))
+        .filter((k): k is string => !!k),
+    n);
+  await page.evaluate(
+    (favs) => localStorage.setItem('morpho-ext:favorites', JSON.stringify(favs)),
+    keys,
+  );
+  await page.reload();
+  await page.waitForSelector('tbody tr[data-morpho-ext-fav="on"]', { timeout: 30_000 });
+  // Let the rest of the table instrument + any number-flow animations settle.
+  await page.waitForTimeout(800);
+  return keys;
+}
+
+async function hideSiteChrome(page: Page): Promise<void> {
+  await page.addStyleTag({
+    content:
+      '#intercom-container,.intercom-launcher,[class*="intercom"]{display:none !important;}',
+  });
+}
+
+test('shot: favorites on markets list (light)', async () => {
+  const page = await ctx.newPage();
+  await seedFavoritesFromList(page, MARKETS_LIST_URL, 3);
+  await hideSiteChrome(page);
+  await page.waitForTimeout(400);
+  await page.screenshot({
+    path: join(OUT_DIR, 'favorites-markets-light.png'),
+    fullPage: false,
+  });
+});
+
+test('shot: favorites-only filter on markets list (light)', async () => {
+  const page = await ctx.newPage();
+  await seedFavoritesFromList(page, MARKETS_LIST_URL, 3);
+  await page.locator('#morpho-ext-fav-toggle').click();
+  await hideSiteChrome(page);
+  await page.waitForTimeout(400);
+  await page.screenshot({
+    path: join(OUT_DIR, 'favorites-markets-filtered-light.png'),
+    fullPage: false,
+  });
+});
+
+test('shot: favorites on vaults list (light)', async () => {
+  const page = await ctx.newPage();
+  await seedFavoritesFromList(page, VAULTS_LIST_URL, 3);
+  await hideSiteChrome(page);
+  await page.waitForTimeout(400);
+  await page.screenshot({
+    path: join(OUT_DIR, 'favorites-vaults-light.png'),
+    fullPage: false,
+  });
+});
+
+test('shot: favorites on markets list (dark)', async () => {
+  const page = await ctx.newPage();
+  await page.addInitScript(() => {
+    try { localStorage.setItem('theme', 'dark'); } catch { /* ignore */ }
+    const dark = () => document.documentElement.classList.add('dark');
+    if (document.documentElement) dark();
+    document.addEventListener('DOMContentLoaded', dark);
+  });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await seedFavoritesFromList(page, MARKETS_LIST_URL, 3);
+  await hideSiteChrome(page);
+  await page.waitForTimeout(400);
+  await page.screenshot({
+    path: join(OUT_DIR, 'favorites-markets-dark.png'),
+    fullPage: false,
+  });
+});
+
+test('shot: favorites close-up (light)', async () => {
+  // Crop a tight shot highlighting the star + chip together.
+  const page = await ctx.newPage();
+  await seedFavoritesFromList(page, MARKETS_LIST_URL, 2);
+  await hideSiteChrome(page);
+  await page.waitForTimeout(400);
+  // Take full screenshot, then crop programmatically — simpler than
+  // computing element bounds across light/dark + viewport variants.
+  await page.screenshot({
+    path: join(OUT_DIR, 'favorites-closeup-light.png'),
+    clip: { x: 0, y: 0, width: 720, height: 560 },
+  });
+});
+
+// ------------------------------------------------------------
+// Chrome Web Store 1280x800 versions — separate context, exact viewport.
+// ------------------------------------------------------------
+test.describe('store: favorites (1280x800)', () => {
+  let favCtx: BrowserContext;
+  let favDir: string;
+
+  test.beforeAll(async () => {
+    favDir = mkdtempSync(join(tmpdir(), 'morpho-shots-fav-'));
+    favCtx = await chromium.launchPersistentContext(favDir, {
+      headless: false,
+      viewport: { width: 1280, height: 800 },
+      args: [
+        `--disable-extensions-except=${EXT_PATH}`,
+        `--load-extension=${EXT_PATH}`,
+        '--no-first-run',
+        '--no-default-browser-check',
+      ],
+    });
+  });
+
+  test.afterAll(async () => {
+    await favCtx?.close();
+    if (favDir) rmSync(favDir, { recursive: true, force: true });
+  });
+
+  test('store: favorites on markets list', async () => {
+    const page = await favCtx.newPage();
+    await seedFavoritesFromList(page, MARKETS_LIST_URL, 3);
+    await hideSiteChrome(page);
+    await page.waitForTimeout(400);
+    await page.screenshot({
+      path: join(OUT_DIR, 'store-favorites-markets-1280x800.png'),
+    });
+  });
+
+  test('store: favorites-only filter on markets list', async () => {
+    const page = await favCtx.newPage();
+    await seedFavoritesFromList(page, MARKETS_LIST_URL, 3);
+    await page.locator('#morpho-ext-fav-toggle').click();
+    await hideSiteChrome(page);
+    await page.waitForTimeout(800);
+    await page.screenshot({
+      path: join(OUT_DIR, 'store-favorites-markets-filtered-1280x800.png'),
+    });
+  });
+
+  test('store: favorites on markets list (dark)', async () => {
+    const page = await favCtx.newPage();
+    await page.addInitScript(() => {
+      try { localStorage.setItem('theme', 'dark'); } catch { /* ignore */ }
+      const dark = () => document.documentElement.classList.add('dark');
+      if (document.documentElement) dark();
+      document.addEventListener('DOMContentLoaded', dark);
+    });
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await seedFavoritesFromList(page, MARKETS_LIST_URL, 3);
+    await hideSiteChrome(page);
+    await page.waitForTimeout(400);
+    await page.screenshot({
+      path: join(OUT_DIR, 'store-favorites-markets-dark-1280x800.png'),
+    });
+  });
 });

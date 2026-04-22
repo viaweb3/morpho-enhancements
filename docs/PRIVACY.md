@@ -1,16 +1,17 @@
 # Privacy Policy — Morpho Enhancements
 
-_Last updated: 2026-04-21_
+_Last updated: 2026-04-22_
 
 This Chrome extension ("Morpho Enhancements") does not collect, store, or transmit personal information.
 
 ## What the extension does
 
 - Runs **only** on pages under `https://app.morpho.org/*`.
-- Reads the page DOM to inject its own UI (a Lend tab on market pages and a Market Lending card on the dashboard).
+- Reads the page DOM to inject its own UI (a Lend tab on market pages, a Market Lending card on the dashboard, and favorites stars on the `/markets` and `/vaults` list pages).
 - Uses the EIP-6963 / EIP-1193 wallet provider that the page itself already surfaces, so you can supply and withdraw without a second wallet-connect flow.
 - Queries the Morpho Blue smart contract via public JSON-RPC endpoints (viem fallback: publicnode.com, ankr.com, cloudflare-eth.com, llamarpc.com, and chain-owned RPCs).
 - Queries Morpho's public GraphQL API at `https://blue-api.morpho.org/graphql` for APY and USD values.
+- Stores the list of markets / vaults you mark as favorites in the browser's `localStorage` under the `app.morpho.org` origin (key: `morpho-ext:favorites`). This is a plain JSON array of `kind:chain:address` strings. It stays on your device, is never transmitted anywhere, and can be cleared at any time by deleting site data for `app.morpho.org`.
 
 ## What the extension does NOT do
 

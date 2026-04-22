@@ -6,6 +6,10 @@ import {
   teardownMarketIntegration,
   isMarketIntegrationAttached,
 } from './marketIntegration';
+import {
+  setupListIntegration,
+  teardownListIntegration,
+} from './listsIntegration';
 import { DashboardSupplyCard } from '@/ui/DashboardSupplyCard';
 import { SUPPORTED_SLUGS, chainIdFromSlug } from '@/lib/chains';
 import type { RouteMatch } from '@/lib/url';
@@ -86,6 +90,7 @@ function reconcileDashboard(route: Extract<RouteMatch, { kind: 'dashboard' }>): 
 
 function unmountAll() {
   teardownMarketIntegration();
+  teardownListIntegration();
   dashboardMount?.unmount();
   dashboardMount = null;
 }
@@ -101,12 +106,19 @@ function retryUntil(attempt: () => boolean, maxTries: number, delayMs: number) {
 
 watchRoute((route) => {
   if (route.kind === 'market') {
+    teardownListIntegration();
     dashboardMount?.unmount();
     dashboardMount = null;
     retryUntil(() => reconcileMarket(route), 12, 400);
   } else if (route.kind === 'dashboard') {
     teardownMarketIntegration();
+    teardownListIntegration();
     retryUntil(() => reconcileDashboard(route), 12, 400);
+  } else if (route.kind === 'markets-list' || route.kind === 'vaults-list') {
+    teardownMarketIntegration();
+    dashboardMount?.unmount();
+    dashboardMount = null;
+    setupListIntegration(route.kind === 'markets-list' ? 'markets' : 'vaults');
   } else {
     unmountAll();
   }
