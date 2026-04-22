@@ -1,0 +1,79 @@
+name: release
+
+# Builds the extension and attaches the ZIP to a GitHub Release whenever
+# a tag matching `v*` is pushed. Users can then install directly from the
+# release page (download zip -> chrome://extensions -> Developer mode ->
+# Load unpacked) without waiting for Chrome Web Store review.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify tag matches package.json version
+        run: |
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Tag v$TAG_VERSION does not match package.json version $PKG_VERSION"
+            exit 1
+          fi
+          echo "VERSION=$PKG_VERSION" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: pnpm build
+
+      - name: Package zip
+        run: node scripts/package-zip.mjs
+
+      - name: Also archive unpacked dist/ for Load-Unpacked installs
+        run: |
+          cd dist
+          zip -r "../dist-zip/morpho-enhancements-${VERSION}-unpacked.zip" . -x '*.map' -x '.vite/*'
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: v${{ env.VERSION }}
+          generate_release_notes: true
+          body: |
+            ## Install
+
+            Chrome Web Store builds take days to review. To install directly from this release:
+
+            1. Download `morpho-enhancements-${{ env.VERSION }}-unpacked.zip` below
+            2. Unzip it somewhere (e.g. `~/extensions/morpho-enhancements-${{ env.VERSION }}/`)
+            3. Open `chrome://extensions` in Chrome or any Chromium-based browser
+            4. Turn on **Developer mode** (top-right)
+            5. Click **Load unpacked** and select the unzipped folder
+
+            The other ZIP (`morpho-enhancements-${{ env.VERSION }}.zip`) is the Chrome Web Store upload artifact — same contents, different packaging; most users want the `-unpacked` one.
+
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/v${{ env.VERSION }}/CHANGELOG.md#${{ env.VERSION }}) for what changed.
+          files: |
+            dist-zip/morpho-enhancements-${{ env.VERSION }}.zip
+            dist-zip/morpho-enhancements-${{ env.VERSION }}-unpacked.zip

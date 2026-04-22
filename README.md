@@ -66,7 +66,25 @@ A Chrome extension that fills three gaps in [app.morpho.org](https://app.morpho.
 
 Slugs are sourced from `app.morpho.org/sitemap.xml`; addresses from [`morpho-blue-api-metadata`](https://github.com/morpho-org/morpho-blue-api-metadata).
 
-## Install (dev)
+## Install
+
+### From GitHub Releases (recommended while Chrome Web Store review is pending)
+
+Each `v*` tag triggers a GitHub Actions build that attaches the ZIP to the
+[Releases page](../../releases). To install:
+
+1. Download `morpho-enhancements-<version>-unpacked.zip` from the latest release
+2. Unzip it somewhere stable (e.g. `~/extensions/morpho-enhancements/`)
+3. Open `chrome://extensions`
+4. Toggle **Developer mode** on (top-right)
+5. Click **Load unpacked** → pick the unzipped folder
+
+Chrome will show "Developer mode extension" warnings — that's expected for any
+locally-installed extension. Reviews in the Chrome Web Store unlock the
+one-click install experience but take days; this path is identical in
+functionality.
+
+### From source (dev)
 
 ```bash
 pnpm install
