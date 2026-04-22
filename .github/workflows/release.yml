@@ -9,6 +9,15 @@ on:
   push:
     tags:
       - 'v*'
+  # Manual dispatch: useful for verifying workflow changes against an
+  # existing tag (softprops/action-gh-release updates an existing
+  # release in-place and overwrites matching asset names).
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to rebuild (e.g. v0.2.0)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -17,8 +26,21 @@ jobs:
   build-and-release:
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve ref
+        id: ref
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "ref=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.ref.outputs.ref }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
@@ -37,7 +59,8 @@ jobs:
       - name: Verify tag matches package.json version
         run: |
           PKG_VERSION="$(node -p "require('./package.json').version")"
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          TAG="${{ steps.ref.outputs.tag }}"
+          TAG_VERSION="${TAG#v}"
           if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
             echo "::error::Tag v$TAG_VERSION does not match package.json version $PKG_VERSION"
             exit 1
@@ -58,6 +81,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: v${{ env.VERSION }}
           name: v${{ env.VERSION }}
           generate_release_notes: true
           body: |
