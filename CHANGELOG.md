@@ -47,5 +47,5 @@ Initial release.
 - Humanized error messages for common revert / rejection cases.
 - Chrome Web Store listing images at 1280×800.
 
-[0.2.0]: https://github.com/<ORG>/morpho-enhancements/releases/tag/v0.2.0
-[0.1.0]: https://github.com/<ORG>/morpho-enhancements/releases/tag/v0.1.0
+[0.2.0]: https://github.com/viaweb3/morpho-enhancements/releases/tag/v0.2.0
+[0.1.0]: https://github.com/viaweb3/morpho-enhancements/releases/tag/v0.1.0

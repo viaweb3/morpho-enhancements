@@ -37,7 +37,7 @@ Una extensión de Chrome que rellena tres huecos en [app.morpho.org](https://app
 
 - **Pestañas Borrow | Lend** en el panel de mercado. Al pulsar Lend se sustituye el formulario nativo por una UI de supply / withdraw con el mismo lenguaje visual de Morpho, tanto en modo claro como oscuro.
 - **Wrap automático ETH / WETH** — cuando el activo de préstamo es el token wrapped-native de la cadena, un toggle te deja pagar con la moneda nativa (POL en Polygon, MON en Monad, HYPE en HyperEVM, etc.); la extensión hace el wrap antes del supply y el unwrap tras el withdraw. Dos firmas en total, sin pasos extra de UX para el wrap.
-- **Dashboard multi-cadena (10)** — la tarjeta Market Lending consulta todas las cadenas soportadas en un único request: Ethereum, Base, Arbitrum, Optimism, Polygon, Unichain, Monad, World Chain, Katana, HyperEVM.
+- **Dashboard multi-cadena** — la tarjeta Market Lending consulta en un único request todas las cadenas soportadas por Morpho. La lista vigente se mantiene en [src/services/chain/morphoSupportedChains.ts](src/services/chain/morphoSupportedChains.ts).
 - **Favoritos en páginas de lista** — marca con estrella mercados y vaults en `/markets` y `/vaults`, y luego filtra la tabla a tus favoritos con un chip de un clic. Se guarda solo en `localStorage` (sin servidor ni tracking); funciona offline y se sincroniza entre pestañas.
 - **Reutiliza la wallet de la página** — sin segundo flujo de connect. Funciona con MetaMask, Rabby, Frame, Coinbase Wallet y cualquier inyección compatible con EIP-6963.
 - **Soporte ERC-20 no estándar** — USDT (y otros tokens cuyo `approve` no devuelve datos) funcionan de fábrica; el ABI de approve se declara sin outputs, así la simulación de viem no falla con `0x`.

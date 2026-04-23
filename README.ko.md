@@ -37,7 +37,7 @@
 
 - **Borrow | Lend 탭** — 마켓 패널에 Lend 탭이 추가됩니다. 라이트/다크 모두에서 Morpho 시각 언어에 맞춘 Supply / Withdraw UI 로 전환됩니다.
 - **ETH / WETH 자동 래핑** — 대출 자산이 해당 체인의 wrapped-native 토큰일 때, 네이티브 통화(Polygon 의 POL, Monad 의 MON, HyperEVM 의 HYPE 등)로 결제할 수 있는 토글이 나타납니다. Supply 전 자동 wrap, Withdraw 후 자동 unwrap — 서명은 총 2 회, 별도 wrap 화면 이동 없음.
-- **10 체인 대시보드** — Market Lending 카드는 Ethereum, Base, Arbitrum, Optimism, Polygon, Unichain, Monad, World Chain, Katana, HyperEVM 을 한 번에 조회합니다.
+- **멀티체인 대시보드** — Market Lending 카드는 Morpho 가 지원하는 모든 체인을 한 번의 요청으로 조회합니다. 실제 체인 목록은 [src/services/chain/morphoSupportedChains.ts](src/services/chain/morphoSupportedChains.ts) 에 관리됩니다.
 - **리스트 페이지 즐겨찾기** — `/markets` 와 `/vaults` 의 마켓/vault 에 별 표시를 하고, 원클릭 칩으로 내 선택만 남도록 필터. `localStorage` 만 사용(서버·추적 없음), 오프라인 동작, 탭 간 동기화.
 - **페이지 지갑 재사용** — 두 번째 connect 흐름 없음. MetaMask, Rabby, Frame, Coinbase Wallet, EIP-6963 호환 주입 지갑 모두 지원.
 - **비표준 ERC-20 지원** — USDT(및 `approve` 가 데이터를 반환하지 않는 기타 토큰)가 그대로 동작합니다. approve ABI 를 no outputs 로 선언하여 viem 의 simulation 이 `0x` 에서 실패하지 않습니다.

@@ -59,7 +59,7 @@ Long form (up to ~16,000 chars). A usable draft:
 >
 > • **Market-level Supply & Withdraw** — every Morpho Blue market page gets a Lend tab next to Borrow. Deposit the loan asset directly into a specific market (not just a vault) to earn market-specific interest, and withdraw in the same UI.
 >
-> • **Dashboard visibility** — your direct-market lending positions show up on the dashboard, across every chain Morpho supports: Ethereum, Base, Arbitrum, Optimism, Polygon, Unichain, Monad, World Chain, Katana, HyperEVM.
+> • **Dashboard visibility** — your direct-market lending positions show up on the dashboard, across every chain Morpho supports.
 >
 > • **Favorites on /markets and /vaults** — star any row; a Favorites-only chip filters the list down to just your picks. Kept in your browser only, works across tabs.
 >
@@ -70,7 +70,7 @@ Long form (up to ~16,000 chars). A usable draft:
 > – Never holds private keys; every signature is yours.
 > – Transactions are simulated before being sent so reverts become readable errors.
 >
-> Open source under MIT: https://github.com/<ORG>/morpho-enhancements
+> Open source under MIT: https://github.com/viaweb3/morpho-enhancements
 
 ### Category
 `Productivity`

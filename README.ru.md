@@ -37,7 +37,7 @@
 
 - **Вкладки Borrow | Lend** на панели рынка. Клик по Lend заменяет штатную форму на UI supply / withdraw, совпадающий со стилем Morpho в светлой и тёмной темах.
 - **Автоматический wrap ETH / WETH** — если заёмный актив является wrapped-native токеном сети, появляется переключатель, позволяющий платить нативной валютой (POL на Polygon, MON на Monad, HYPE на HyperEVM и т. д.). Расширение автоматически делает wrap перед supply и unwrap после withdraw. Всего две подписи, без отдельного UX-прохода для wrap.
-- **Dashboard по 10 сетям** — карточка Market Lending одним запросом охватывает Ethereum, Base, Arbitrum, Optimism, Polygon, Unichain, Monad, World Chain, Katana, HyperEVM.
+- **Мультисетевой Dashboard** — карточка Market Lending одним запросом охватывает все сети, которые поддерживает Morpho. Актуальный список сетей поддерживается в [src/services/chain/morphoSupportedChains.ts](src/services/chain/morphoSupportedChains.ts).
 - **Избранное на страницах списков** — звезда у рынков и vault-ов в `/markets` и `/vaults`, фильтрация одним кликом. Хранение только в `localStorage` (без сервера и трекинга), работает офлайн, синхронизируется между вкладками.
 - **Использует уже подключенный кошелёк** — без повторного connect-флоу. Поддерживает MetaMask, Rabby, Frame, Coinbase Wallet и любой EIP-6963-совместимый провайдер.
 - **Нестандартные ERC-20** — USDT (и другие токены, у которых `approve` не возвращает данных) работают из коробки; approve ABI объявлен без outputs, поэтому симуляция viem не падает на `0x`.

@@ -37,7 +37,7 @@
 
 - **Borrow | Lend 标签切换** —— 市场面板上新增 Lend 标签。点击后原生表单切换为 Supply / Withdraw UI,视觉风格匹配 Morpho 的亮色和暗色主题。
 - **ETH / WETH 自动包装** —— 当市场贷款资产是该链的 wrapped-native 代币时,开关一打,直接用原生 ETH(或 Polygon 的 POL、Monad 的 MON、HyperEVM 的 HYPE)支付,扩展自动在 Supply 前 wrap、Withdraw 后 unwrap。全程两次签名,没有单独的 wrap UX 跳转。
-- **10 链 Dashboard** —— Market Lending 卡片一次请求就覆盖所有 Morpho 支持链:Ethereum、Base、Arbitrum、Optimism、Polygon、Unichain、Monad、World Chain、Katana、HyperEVM。
+- **多链 Dashboard** —— Market Lending 卡片一次请求就覆盖所有 Morpho 支持链。完整链列表维护在 [src/services/chain/morphoSupportedChains.ts](src/services/chain/morphoSupportedChains.ts)。
 - **列表页收藏** —— 在 `/markets` 和 `/vaults` 给任意行打星标,再用一键 chip 把列表筛到只剩你关心的那些。数据只存 `localStorage`(无服务器、无追踪),离线可用,多标签页同步。
 - **复用页面钱包** —— 不需要二次连接钱包。支持 MetaMask、Rabby、Frame、Coinbase Wallet,以及任何符合 EIP-6963 的注入钱包。
 - **兼容非标准 ERC-20** —— USDT(以及其他 `approve` 不返回数据的代币)开箱即用;approve ABI 声明为 no outputs,这样 viem 的 simulation 不会在 `0x` 上报错。

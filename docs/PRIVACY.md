@@ -33,7 +33,7 @@ The wallet address that you view a dashboard for (e.g. `/dashboard/0x…`) is in
 
 ## Contact
 
-Issues, questions, or pull requests: https://github.com/<ORG>/morpho-enhancements
+Issues, questions, or pull requests: https://github.com/viaweb3/morpho-enhancements
 
 ## Changes
 

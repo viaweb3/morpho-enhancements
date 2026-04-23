@@ -37,7 +37,7 @@ A Chrome extension that fills three gaps in [app.morpho.org](https://app.morpho.
 
 - **Borrow | Lend tabs** on the market panel. Clicking Lend swaps the native form for a supply / withdraw UI that matches Morpho's visual language in both light and dark mode.
 - **ETH / WETH wrap toggle** when the loan asset is the chain's wrapped-native token. Pay with native ETH (or POL on Polygon, MON on Monad, HYPE on HyperEVM) — the extension auto-wraps before supply and auto-unwraps after withdraw. Two signatures total; no separate wrap UX trip.
-- **10-chain dashboard** — Market Lending card queries all Morpho-supported chains in one request: Ethereum, Base, Arbitrum, Optimism, Polygon, Unichain, Monad, World Chain, Katana, HyperEVM.
+- **Multi-chain dashboard** — Market Lending card queries every chain Morpho supports in one request. The live chain list is maintained in [src/services/chain/morphoSupportedChains.ts](src/services/chain/morphoSupportedChains.ts).
 - **Favorites on list pages** — star markets and vaults in `/markets` and `/vaults`, then filter the table down to just your picks with a one-click chip. Stored in `localStorage` only (no server, no tracking); works offline and syncs across tabs.
 - **Reuses the page's wallet** — no second connect flow. Works with MetaMask, Rabby, Frame, Coinbase Wallet, and any EIP-6963–compliant injection.
 - **Non-standard ERC-20 support** — USDT (and other tokens whose `approve` returns no data) work out of the box; the approve ABI is declared with no outputs so viem's simulation doesn't fail on `0x`.
