@@ -33,12 +33,77 @@ test.afterAll(async () => {
 });
 
 test.beforeEach(async () => {
-  // Ensure favorites state from previous tests doesn't leak.
+  // Ensure favorites state from previous tests doesn't leak. Favorites
+  // live in chrome.storage.local (see src/lib/favorites.ts) which the
+  // page main world can't read directly; the content script exposes a
+  // postMessage test bridge for the E2E runner.
   const page = await ctx.newPage();
   await page.goto('https://app.morpho.org/');
-  await page.evaluate(() => localStorage.removeItem('morpho-ext:favorites'));
+  await clearFavorites(page);
   await page.close();
 });
+
+// Wait for the content-script test bridge to be live before we post —
+// the listener is registered at document_idle, so a too-eager call gets
+// silently dropped and the round-trip never resolves.
+async function waitForBridge(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () =>
+      new Promise<boolean>((resolve) => {
+        const timeout = setTimeout(() => resolve(false), 800);
+        const handler = (e: MessageEvent) => {
+          const data = e.data as { type?: string } | null;
+          if (e.source === window && data?.type === 'morpho-ext-test:extension-id') {
+            clearTimeout(timeout);
+            window.removeEventListener('message', handler);
+            resolve(true);
+          }
+        };
+        window.addEventListener('message', handler);
+        window.postMessage({ type: 'morpho-ext-test:get-extension-id' }, '*');
+      }),
+    { timeout: 15_000 },
+  );
+}
+
+async function clearFavorites(page: Page): Promise<void> {
+  await waitForBridge(page);
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        const handler = (e: MessageEvent) => {
+          if (
+            e.source === window &&
+            (e.data as { type?: string } | null)?.type ===
+              'morpho-ext-test:cleared'
+          ) {
+            window.removeEventListener('message', handler);
+            resolve();
+          }
+        };
+        window.addEventListener('message', handler);
+        window.postMessage({ type: 'morpho-ext-test:clear-favorites' }, '*');
+      }),
+  );
+}
+
+async function getFavorites(page: Page): Promise<string[]> {
+  await waitForBridge(page);
+  return page.evaluate(
+    () =>
+      new Promise<string[]>((resolve) => {
+        const handler = (e: MessageEvent) => {
+          const data = e.data as { type?: string; keys?: string[] } | null;
+          if (e.source === window && data?.type === 'morpho-ext-test:favorites') {
+            window.removeEventListener('message', handler);
+            resolve(data.keys ?? []);
+          }
+        };
+        window.addEventListener('message', handler);
+        window.postMessage({ type: 'morpho-ext-test:get-favorites' }, '*');
+      }),
+  );
+}
 
 async function waitForStars(page: Page): Promise<number> {
   await page.waitForSelector('tbody tr[data-morpho-ext-fav-key]', { timeout: 30_000 });
@@ -67,10 +132,8 @@ test('injects stars on /markets rows and filters to favorites', async () => {
   const favKey = await firstRow.getAttribute('data-morpho-ext-fav-key');
   expect(favKey).toMatch(/^market:[a-z-]+:0x[a-f0-9]+$/);
 
-  // Confirm persistence in localStorage.
-  const stored = await page.evaluate(() =>
-    JSON.parse(localStorage.getItem('morpho-ext:favorites') ?? '[]'),
-  );
+  // Confirm persistence in chrome.storage (read via the test bridge).
+  const stored = await getFavorites(page);
   expect(stored).toContain(favKey);
 
   // Toggle the filter chip — non-starred rows should become hidden.
@@ -110,9 +173,7 @@ test('multiple favorites can be selected at once', async () => {
   await expect(rows.nth(1)).toHaveAttribute('data-morpho-ext-fav', 'on');
   await expect(rows.nth(2)).toHaveAttribute('data-morpho-ext-fav', 'on');
 
-  const stored = await page.evaluate(() =>
-    JSON.parse(localStorage.getItem('morpho-ext:favorites') ?? '[]'),
-  );
+  const stored = await getFavorites(page);
   expect(stored.length).toBeGreaterThanOrEqual(3);
 
   // Clicking the navigation (the <a>) should still work on unstarred areas.

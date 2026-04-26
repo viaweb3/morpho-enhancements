@@ -1,0 +1,537 @@
+:root {
+  /* Brand */
+  --p-brand: #2973ff;
+  --p-brand-dark: #1858db;
+  --p-brand-glow: rgba(41, 115, 255, 0.18);
+  --p-accent-green: #16a34a;
+
+  /* Surfaces (light) */
+  --p-bg: #ffffff;
+  --p-surface: #fafafa;
+  --p-surface-hover: #f3f4f6;
+  --p-surface-strong: #eef0f3;
+  --p-border: #e5e7eb;
+  --p-border-strong: #d1d5db;
+
+  /* Text (light) */
+  --p-fg: #0b1220;
+  --p-fg-muted: #5b6577;
+  --p-fg-subtle: #8b94a3;
+  --p-fg-onbrand: #ffffff;
+
+  /* Chain palette — authentic L1/L2 brand colors */
+  --p-chain-mainnet: #627eea;
+  --p-chain-base: #0052ff;
+  --p-chain-arbitrum: #28a0f0;
+  --p-chain-op: #ff0420;
+  --p-chain-polygon: #7b3fe4;
+  --p-chain-unichain: #f50db4;
+  --p-chain-monad: #836ef9;
+  --p-chain-world: #1f2937;
+  --p-chain-katana: #e64e2a;
+  --p-chain-hyperevm: #00c896;
+  --p-chain-default: #6b7280;
+
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --p-bg: #0b1220;
+    --p-surface: #121a2c;
+    --p-surface-hover: #1a2540;
+    --p-surface-strong: #1f2c4a;
+    --p-border: rgba(255, 255, 255, 0.07);
+    --p-border-strong: rgba(255, 255, 255, 0.14);
+
+    --p-fg: #f5f7fb;
+    --p-fg-muted: #a4adc0;
+    --p-fg-subtle: #6b7488;
+
+    --p-chain-world: #f5f7fb;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--p-bg);
+  color: var(--p-fg);
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Helvetica Neue', sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  width: 400px;
+  min-height: 240px;
+  max-height: 580px;
+  overflow: hidden;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-height: 580px;
+}
+
+/* ─── Header (brand band) ─── */
+
+.p-banner {
+  position: relative;
+  padding: 18px 16px 16px;
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgba(255, 255, 255, 0.18), transparent 60%),
+    linear-gradient(135deg, var(--p-brand) 0%, var(--p-brand-dark) 100%);
+  color: var(--p-fg-onbrand);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.p-banner::after {
+  content: '';
+  position: absolute;
+  right: -40px;
+  top: -60px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.16), transparent 70%);
+  pointer-events: none;
+}
+
+.p-banner-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  position: relative;
+  z-index: 1;
+}
+
+.p-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.p-brand-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.96);
+  padding: 3px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+  flex-shrink: 0;
+  display: block;
+}
+
+.p-brand-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.45;
+  /* Match logo height so flex centering aligns the visible text middle
+     with the logo's center, regardless of the font's ascender bias. */
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+}
+
+.p-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--p-fg-onbrand);
+  cursor: pointer;
+  transition: background 0.15s ease;
+  backdrop-filter: blur(6px);
+}
+.p-refresh:hover { background: rgba(255, 255, 255, 0.28); }
+.p-refresh:active { background: rgba(255, 255, 255, 0.34); }
+.p-refresh[data-loading="true"] svg { animation: p-spin 0.9s linear infinite; }
+@keyframes p-spin { to { transform: rotate(360deg); } }
+
+/* ─── Tabs ─── */
+
+.p-tabs {
+  display: flex;
+  gap: 0;
+  padding: 4px 14px 0;
+  border-bottom: 1px solid var(--p-border);
+  flex-shrink: 0;
+}
+
+/* Underline-tab pattern: tabs hug their content (no flex:1 stretch),
+   active tab gets a brand-blue underline that overlays the row's
+   bottom border for a visually connected look. */
+.p-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 11px 4px 11px;
+  margin-right: 22px;
+  border: none;
+  background: transparent;
+  color: var(--p-fg-muted);
+  font: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.12s ease;
+}
+.p-tab:hover { color: var(--p-fg); }
+.p-tab[data-active="true"] {
+  color: var(--p-brand);
+  font-weight: 700;
+}
+.p-tab[data-active="true"]::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2.5px;
+  background: var(--p-brand);
+  border-radius: 2px 2px 0 0;
+}
+.p-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 17px;
+  padding: 0 6px;
+  border-radius: 9999px;
+  background: var(--p-surface-strong);
+  color: var(--p-fg-muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.p-tab[data-active="true"] .p-tab-count {
+  background: var(--p-brand-glow);
+  color: var(--p-brand);
+}
+.p-tab-icon {
+  font-size: 13px;
+  line-height: 1;
+  color: inherit;
+}
+
+/* ─── Sort sub-bar ─── */
+
+.p-sortbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px 6px 14px;
+  border-bottom: 1px solid var(--p-border);
+  background: var(--p-surface);
+  flex-shrink: 0;
+}
+
+.p-sortbar-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--p-fg-subtle);
+}
+
+.p-sortgroup {
+  display: inline-flex;
+  background: var(--p-bg);
+  border: 1px solid var(--p-border);
+  border-radius: 7px;
+  padding: 1px;
+  gap: 0;
+}
+
+.p-sortbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--p-fg-muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.p-sortbtn:hover {
+  color: var(--p-fg);
+}
+.p-sortbtn[data-active="true"] {
+  background: var(--p-brand);
+  color: #fff;
+}
+.p-sortbtn-arrow {
+  font-size: 9px;
+  opacity: 0.7;
+}
+
+/* ─── List ─── */
+
+.p-list {
+  flex: 1 1 auto;
+  /* Critical for flex column: without min-height:0 the child's intrinsic
+     height (sum of all rows) prevents it from shrinking, which then
+     forces sibling items (banner, tabs) to share the squeeze. */
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 8px 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--p-border-strong) transparent;
+}
+.p-list::-webkit-scrollbar { width: 8px; }
+.p-list::-webkit-scrollbar-thumb {
+  background: var(--p-border-strong);
+  border-radius: 4px;
+  border: 2px solid var(--p-bg);
+}
+
+.p-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--p-fg);
+  padding: 8px 10px 9px;
+  cursor: pointer;
+  font: inherit;
+  transition: background 0.1s ease, border-color 0.1s ease, transform 0.05s ease;
+}
+.p-row + .p-row { margin-top: 1px; }
+.p-row:hover {
+  background: var(--p-surface);
+  border-color: var(--p-border);
+}
+.p-row:active { transform: scale(0.997); }
+
+.p-row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+
+.p-pair {
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--p-fg);
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* Token icons + paired (overlapping) variant */
+
+.p-token-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--p-surface-strong);
+  flex-shrink: 0;
+  object-fit: cover;
+  border: 1.5px solid var(--p-bg);
+  box-shadow: 0 0 0 1px var(--p-border);
+}
+
+.p-token-icon-fallback {
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.p-token-pair {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.p-token-pair .p-token-icon + .p-token-icon {
+  margin-left: -6px;
+}
+
+.p-pair-arrow {
+  color: var(--p-fg-subtle);
+  font-size: 11px;
+  transition: color 0.12s ease, transform 0.12s ease;
+}
+.p-row:hover .p-pair-arrow {
+  color: var(--p-brand);
+  transform: translateX(2px);
+}
+
+.p-version-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--p-surface-strong);
+  color: var(--p-fg-muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  border: 1px solid var(--p-border);
+  margin-left: 2px;
+}
+.p-version-chip[data-version="v2"] {
+  color: var(--p-brand);
+  border-color: var(--p-brand-glow);
+  background: var(--p-brand-glow);
+}
+
+.p-chain-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px 7px;
+  border-radius: 6px;
+  /* Neutral chip background keeps every chain equally legible; only
+     the dot and (subtly) the text take the brand color. */
+  background: var(--p-surface-strong);
+  border: 1px solid var(--p-border);
+  color: var(--p-fg);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  line-height: 1;
+}
+.p-chain-chip::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--chain-fg, currentColor);
+  box-shadow: 0 0 0 2px var(--chain-glow, transparent);
+}
+
+.p-row-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 11.5px;
+  color: var(--p-fg-muted);
+}
+.p-row-stats > span { white-space: nowrap; }
+.p-row-stats > span > strong {
+  color: var(--p-fg);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.p-row-stats > .p-stat-apy > strong {
+  color: var(--p-accent-green);
+}
+
+/* ─── Empty / error / skeleton ─── */
+
+.p-empty, .p-error {
+  padding: 36px 22px 28px;
+  text-align: center;
+  color: var(--p-fg-muted);
+  font-size: 12.5px;
+}
+.p-empty-icon {
+  font-size: 28px;
+  margin-bottom: 8px;
+  display: inline-block;
+  filter: grayscale(0.2);
+}
+.p-empty strong {
+  color: var(--p-fg);
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+.p-empty code {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--p-surface-strong);
+  color: var(--p-fg);
+  font-size: 11.5px;
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+}
+
+.p-skeleton-row {
+  margin: 2px 0;
+  padding: 10px;
+  border-radius: 10px;
+  background: linear-gradient(
+    90deg,
+    var(--p-surface) 0%,
+    var(--p-surface-hover) 50%,
+    var(--p-surface) 100%
+  );
+  background-size: 200% 100%;
+  animation: p-shimmer 1.4s ease-in-out infinite;
+  height: 52px;
+}
+@keyframes p-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ─── Footer ─── */
+
+.p-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px 10px;
+  border-top: 1px solid var(--p-border);
+  font-size: 10.5px;
+  color: var(--p-fg-subtle);
+  flex-shrink: 0;
+}
+.p-footer-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.p-footer-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--p-accent-green);
+  box-shadow: 0 0 6px rgba(22, 163, 74, 0.5);
+}
+.p-footer a {
+  color: var(--p-fg-muted);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 500;
+}
+.p-footer a:hover { color: var(--p-brand); }

@@ -15,6 +15,7 @@ export default defineManifest({
   },
   action: {
     default_title: 'Morpho Enhancements',
+    default_popup: 'src/popup/index.html',
   },
   content_scripts: [
     {
@@ -29,9 +30,10 @@ export default defineManifest({
     // would otherwise wrap with a chrome.runtime.getURL loader that fails
     // in MAIN world (no chrome.* API there).
   ],
-  // Intentionally empty — this extension holds no state, reads no tabs, and
-  // uses no Chrome APIs. Host permissions below are the only elevated access.
-  permissions: [],
+  // chrome.storage.local backs the favorites store — chosen over
+  // window.localStorage so the toolbar popup (extension origin) can read
+  // the same data that the content script (app.morpho.org origin) writes.
+  permissions: ['storage'],
   // `blue-api.morpho.org` is NOT listed here: content scripts can fetch()
   // HTTPS URLs for CORS-enabled endpoints without a host permission, and
   // Morpho's API sends permissive CORS headers. Keeping the permission list

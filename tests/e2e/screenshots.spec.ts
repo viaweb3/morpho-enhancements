@@ -380,7 +380,24 @@ async function seedFavoritesFromList(
         .filter((k): k is string => !!k),
     n);
   await page.evaluate(
-    (favs) => localStorage.setItem('morpho-ext:favorites', JSON.stringify(favs)),
+    (favs) =>
+      new Promise<void>((resolve) => {
+        const handler = (e: MessageEvent) => {
+          if (
+            e.source === window &&
+            (e.data as { type?: string } | null)?.type ===
+              'morpho-ext-test:seeded'
+          ) {
+            window.removeEventListener('message', handler);
+            resolve();
+          }
+        };
+        window.addEventListener('message', handler);
+        window.postMessage(
+          { type: 'morpho-ext-test:set-favorites', keys: favs },
+          '*',
+        );
+      }),
     keys,
   );
   await page.reload();

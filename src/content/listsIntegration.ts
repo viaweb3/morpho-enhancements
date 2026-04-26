@@ -16,6 +16,7 @@ import {
   isFavorite,
   onFavoritesChange,
   parseHrefToKey,
+  ready as favoritesReady,
   toggleFavorite,
 } from '@/lib/favorites';
 
@@ -315,6 +316,16 @@ export function setupListIntegration(kind: ListKind): void {
   ensureGlobalClickHandler();
   ensureFilterChip(kind);
   scanRows();
+  // chrome.storage hydration is async; if rows scanned before favorites
+  // loaded, refresh on/off state once the cache catches up.
+  void favoritesReady.then(() => {
+    refreshAllRowStates();
+    const chip = document.getElementById(TOGGLE_ID) as HTMLButtonElement | null;
+    if (chip) {
+      const on = document.documentElement.getAttribute(FILTER_ATTR) === 'true';
+      updateChipContent(chip, kind, on);
+    }
+  });
 
   listUnsub?.();
   listUnsub = onFavoritesChange(() => {
