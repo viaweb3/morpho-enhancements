@@ -544,3 +544,173 @@ test.describe('store: favorites (1280x800)', () => {
     });
   });
 });
+
+// --- Toolbar popup screenshots (v0.3.0+) ----------------------------------
+
+async function discoverExtensionId(): Promise<string> {
+  const probe = await ctx.newPage();
+  await probe.goto('https://app.morpho.org/', { waitUntil: 'domcontentloaded' });
+  // The favorites test bridge in the content script replies with chrome.runtime.id.
+  await probe.waitForFunction(
+    () =>
+      new Promise<boolean>((resolve) => {
+        const timeout = setTimeout(() => resolve(false), 800);
+        const handler = (e: MessageEvent) => {
+          const data = e.data as { type?: string } | null;
+          if (e.source === window && data?.type === 'morpho-ext-test:extension-id') {
+            clearTimeout(timeout);
+            window.removeEventListener('message', handler);
+            resolve(true);
+          }
+        };
+        window.addEventListener('message', handler);
+        window.postMessage({ type: 'morpho-ext-test:get-extension-id' }, '*');
+      }),
+    { timeout: 15_000 },
+  );
+  const id = await probe.evaluate(
+    () =>
+      new Promise<string>((resolve) => {
+        const handler = (e: MessageEvent) => {
+          const data = e.data as { type?: string; id?: string } | null;
+          if (e.source === window && data?.type === 'morpho-ext-test:extension-id') {
+            window.removeEventListener('message', handler);
+            resolve(data.id ?? '');
+          }
+        };
+        window.addEventListener('message', handler);
+        window.postMessage({ type: 'morpho-ext-test:get-extension-id' }, '*');
+      }),
+  );
+  await probe.close();
+  if (!id) throw new Error('Could not discover extension id for popup screenshots');
+  return id;
+}
+
+async function seedFavoritesViaBridge(page: Page, keys: string[]): Promise<void> {
+  await page.waitForFunction(
+    () =>
+      new Promise<boolean>((resolve) => {
+        const timeout = setTimeout(() => resolve(false), 800);
+        const handler = (e: MessageEvent) => {
+          const data = e.data as { type?: string } | null;
+          if (e.source === window && data?.type === 'morpho-ext-test:extension-id') {
+            clearTimeout(timeout);
+            window.removeEventListener('message', handler);
+            resolve(true);
+          }
+        };
+        window.addEventListener('message', handler);
+        window.postMessage({ type: 'morpho-ext-test:get-extension-id' }, '*');
+      }),
+    { timeout: 15_000 },
+  );
+  await page.evaluate(
+    (k) =>
+      new Promise<void>((resolve) => {
+        const handler = (e: MessageEvent) => {
+          const data = e.data as { type?: string } | null;
+          if (e.source === window && data?.type === 'morpho-ext-test:seeded') {
+            window.removeEventListener('message', handler);
+            resolve();
+          }
+        };
+        window.addEventListener('message', handler);
+        window.postMessage(
+          { type: 'morpho-ext-test:set-favorites', keys: k },
+          '*',
+        );
+      }),
+    keys,
+  );
+}
+
+const POPUP_VIEWPORT = { width: 400, height: 580 };
+
+test('shot: popup Prime tab (light)', async () => {
+  const id = await discoverExtensionId();
+  const page = await ctx.newPage();
+  await page.setViewportSize(POPUP_VIEWPORT);
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.goto(`chrome-extension://${id}/src/popup/index.html`);
+  await page.waitForSelector('.p-row', { timeout: 30_000 });
+  // Let token icons fetch + render before snapshotting.
+  await page.waitForTimeout(1200);
+  await page.screenshot({
+    path: join(OUT_DIR, 'popup-prime-light.png'),
+    fullPage: false,
+  });
+  await page.close();
+});
+
+test('shot: popup Prime tab (dark)', async () => {
+  const id = await discoverExtensionId();
+  const page = await ctx.newPage();
+  await page.setViewportSize(POPUP_VIEWPORT);
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.goto(`chrome-extension://${id}/src/popup/index.html`);
+  await page.waitForSelector('.p-row', { timeout: 30_000 });
+  await page.waitForTimeout(1200);
+  await page.screenshot({
+    path: join(OUT_DIR, 'popup-prime-dark.png'),
+    fullPage: false,
+  });
+  await page.close();
+});
+
+test('shot: popup Favorites tab (light)', async () => {
+  const id = await discoverExtensionId();
+  // Seed a representative mix: V1 market, V1 vault, V2 vault.
+  const seed = await ctx.newPage();
+  await seed.goto('https://app.morpho.org/', { waitUntil: 'domcontentloaded' });
+  await seedFavoritesViaBridge(seed, [
+    // V1 market: cbBTC/USDC on Mainnet
+    'market:ethereum:0x64d65c9a2d91c36d56fbc42d69e979335320169b3df63bf92789e2c8883fcc64',
+    // V1 market: WETH/USDC on Base
+    'market:base:0x8793cf302b8ffd655ab97bd1c695dbd967807e8367a65cb2f4edaf1380ba1bda',
+    // V1 vault: Spark Blue Chip USDC Vault on Mainnet
+    'vault:ethereum:0xfeac08ffa38d95ec5ed7c46c933c8891a44c5f26',
+    // V2 vault: sky.money USDT Savings on Mainnet
+    'vault:ethereum:0x23f5e9c35820f4bab695ac1f19c203cc3f8e1e11',
+  ]);
+  await seed.close();
+
+  const page = await ctx.newPage();
+  await page.setViewportSize(POPUP_VIEWPORT);
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.goto(`chrome-extension://${id}/src/popup/index.html`);
+  await page.locator('.p-tab', { hasText: 'Favorites' }).click();
+  await page.waitForSelector('.p-row', { timeout: 30_000 });
+  await page.waitForTimeout(1500);
+  await page.screenshot({
+    path: join(OUT_DIR, 'popup-favorites-light.png'),
+    fullPage: false,
+  });
+  await page.close();
+});
+
+test('shot: popup Favorites tab (dark)', async () => {
+  const id = await discoverExtensionId();
+  const seed = await ctx.newPage();
+  await seed.goto('https://app.morpho.org/', { waitUntil: 'domcontentloaded' });
+  await seedFavoritesViaBridge(seed, [
+    'market:ethereum:0x64d65c9a2d91c36d56fbc42d69e979335320169b3df63bf92789e2c8883fcc64',
+    'market:base:0x8793cf302b8ffd655ab97bd1c695dbd967807e8367a65cb2f4edaf1380ba1bda',
+    'vault:ethereum:0xfeac08ffa38d95ec5ed7c46c933c8891a44c5f26',
+    'vault:ethereum:0x23f5e9c35820f4bab695ac1f19c203cc3f8e1e11',
+  ]);
+  await seed.close();
+
+  const page = await ctx.newPage();
+  await page.setViewportSize(POPUP_VIEWPORT);
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.goto(`chrome-extension://${id}/src/popup/index.html`);
+  await page.locator('.p-tab', { hasText: 'Favorites' }).click();
+  await page.waitForSelector('.p-row', { timeout: 30_000 });
+  await page.waitForTimeout(1500);
+  await page.screenshot({
+    path: join(OUT_DIR, 'popup-favorites-dark.png'),
+    fullPage: false,
+  });
+  await page.close();
+});

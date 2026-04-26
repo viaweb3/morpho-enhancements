@@ -29,7 +29,7 @@ Sanity-check things that trip up reviewers:
 
 - `manifest.json` has the correct `version` (matches `package.json`).
 - `icons` sizes 16 / 32 / 48 / 128 all exist and open cleanly.
-- `permissions` and `host_permissions` list only what's actually used. Currently: none beyond `host_permissions: ["https://app.morpho.org/*"]`.
+- `permissions` and `host_permissions` list only what's actually used. Currently: `permissions: ["storage"]` (favorites + popup data cache) and `host_permissions: ["https://app.morpho.org/*"]`.
 - No source maps for production — remove `*.map` from the ZIP if your build produces them by default.
 
 ```bash
@@ -103,10 +103,10 @@ Keep all screenshots free of real wallet addresses / balances. The generator alr
 
 The dashboard will ask a handful of narrowed-down questions. For this extension the honest answers are:
 
-- **Single purpose**: "Enhances the Morpho lending UI on app.morpho.org with market-level supply/withdraw and a dashboard lending summary."
+- **Single purpose**: "Enhances the Morpho lending UI on app.morpho.org with market-level supply/withdraw, a dashboard lending summary, list-page favorites, and a toolbar popup quick-view of curated and starred markets."
 - **Permission justifications**:
   - `host_permissions: https://app.morpho.org/*` — "Required to inject UI and read DOM on Morpho's own pages; the only site this extension touches."
-  - No other permissions requested.
+  - `permissions: storage` — "Persists the user's market/vault favorites and a small cache of public on-chain figures (APY, TVL) so the toolbar popup paints with last-known data instantly. Stored locally in `chrome.storage.local`; never transmitted."
 - **Remote code use**: No remote code is executed. The extension ships all JS in the ZIP; it calls HTTPS endpoints for JSON data only (RPC + Morpho blue-api).
 - **Data handling**:
   - Does not collect or transmit personal info, authentication info, location, health, financial-personal info, or user activity / web history beyond what's needed to render the injected UI on the one permitted host.
@@ -140,8 +140,8 @@ If rejected, the email explains why. Re-upload the ZIP under the same item; you 
 
 For transparency with reviewers (and future-you):
 
-- No background service worker. Everything is content-script only.
-- No storage API use. No cookies. No `chrome.storage`.
+- No background service worker. Everything is content-script + popup.
+- No cookies. `chrome.storage.local` is used for favorites and the popup data cache only — both stay on the device.
 - No alarms, no tabs, no webRequest, no scripting.
 - No external fonts, no hosted CSS.
 - No fingerprinting or device-identifier reads.

@@ -2,13 +2,15 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Русский](README.ru.md) · **Español**
 
-Una extensión de Chrome que rellena tres huecos en [app.morpho.org](https://app.morpho.org):
+Una extensión de Chrome que rellena cuatro huecos en [app.morpho.org](https://app.morpho.org):
 
 1. **Supply / Withdraw a nivel de mercado** — en cualquier página de mercado de Morpho Blue la UI oficial solo ofrece Borrow. Esta extensión inyecta una pestaña **Lend** junto a Borrow que deposita el activo de préstamo directamente en el mercado (la misma llamada `Morpho.supply()` que usan internamente los vaults de MetaMorpho) y luego permite retirar — así puedes ganar intereses específicos del mercado sin pasar por un MetaMorpho vault.
 
 2. **Visibilidad en el dashboard** — el dashboard oficial lista depósitos en vaults y posiciones de préstamo, pero no los supplies directos al mercado. La extensión añade una tarjeta **Market Lending** que muestra cada mercado donde el usuario presta directamente, en todas las cadenas que soporta Morpho, con valor en USD, APY y acceso directo a la página del mercado.
 
 3. **Favoritos en `/markets` y `/vaults`** — marca con una estrella cualquier fila y activa el chip **Favorites only** para filtrar la lista a los pocos que te importan. Los favoritos se guardan en el navegador y se sincronizan entre pestañas.
+
+4. **Popup en la barra de herramientas** — haz clic en el icono de la extensión para una vista rápida: la pestaña *Prime* lista 19 mercados blue-chip seleccionados a mano en Mainnet / Base / Arbitrum / OP con supply APY, TVL, utilización y LLTV en vivo; la pestaña *Favorites* muestra todos tus mercados y vaults favoritos (V1 y V2 de MetaMorpho con soporte). Ordena por APY o TVL, y haz clic en cualquier fila para saltar a la página correspondiente en app.morpho.org.
 
 <p align="center">
   <img src="docs/screenshots/market-lend-light.png" width="360" alt="Página de mercado — pestaña Lend (claro)">
@@ -31,6 +33,16 @@ Una extensión de Chrome que rellena tres huecos en [app.morpho.org](https://app
   <img src="docs/screenshots/favorites-markets-filtered-light.png" width="720" alt="Lista de Markets filtrada a favoritos (claro)">
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/popup-prime-light.png" width="320" alt="Popup en la barra — pestaña Prime (claro)">
+  <img src="docs/screenshots/popup-favorites-light.png" width="320" alt="Popup en la barra — pestaña Favorites (claro)">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/popup-prime-dark.png" width="320" alt="Popup en la barra — pestaña Prime (oscuro)">
+  <img src="docs/screenshots/popup-favorites-dark.png" width="320" alt="Popup en la barra — pestaña Favorites (oscuro)">
+</p>
+
 > Las capturas usan datos de posición simulados. Balances reales, direcciones y hashes de mercado nunca forman parte de las imágenes publicadas.
 
 ## Funcionalidades
@@ -38,7 +50,8 @@ Una extensión de Chrome que rellena tres huecos en [app.morpho.org](https://app
 - **Pestañas Borrow | Lend** en el panel de mercado. Al pulsar Lend se sustituye el formulario nativo por una UI de supply / withdraw con el mismo lenguaje visual de Morpho, tanto en modo claro como oscuro.
 - **Wrap automático ETH / WETH** — cuando el activo de préstamo es el token wrapped-native de la cadena, un toggle te deja pagar con la moneda nativa (POL en Polygon, MON en Monad, HYPE en HyperEVM, etc.); la extensión hace el wrap antes del supply y el unwrap tras el withdraw. Dos firmas en total, sin pasos extra de UX para el wrap.
 - **Dashboard multi-cadena** — la tarjeta Market Lending consulta en un único request todas las cadenas soportadas por Morpho. La lista vigente se mantiene en [src/services/chain/morphoSupportedChains.ts](src/services/chain/morphoSupportedChains.ts).
-- **Favoritos en páginas de lista** — marca con estrella mercados y vaults en `/markets` y `/vaults`, y luego filtra la tabla a tus favoritos con un chip de un clic. Se guarda solo en `localStorage` (sin servidor ni tracking); funciona offline y se sincroniza entre pestañas.
+- **Favoritos en páginas de lista** — marca con estrella mercados y vaults en `/markets` y `/vaults`, y luego filtra la tabla a tus favoritos con un chip de un clic. Se guarda solo en `chrome.storage.local` (sin servidor ni tracking); se sincroniza entre pestañas y con el popup vía `chrome.storage.onChanged`.
+- **Popup de la barra con dos pestañas** — *Prime* (19 mercados blue-chip seleccionados a mano en Mainnet / Base / Arbitrum / OP) y *Favorites* (tus mercados y vaults marcados; V1 y V2 de MetaMorpho con un pequeño chip `V1`/`V2` en la fila). Caché stale-while-revalidate: 5 min en memoria + persistencia en `chrome.storage.local`, así reabrir el popup pinta los últimos datos al instante mientras se hace fetch fresco en background. Ordena por APY ↓ o TVL ↓.
 - **Reutiliza la wallet de la página** — sin segundo flujo de connect. Funciona con MetaMask, Rabby, Frame, Coinbase Wallet y cualquier inyección compatible con EIP-6963.
 - **Soporte ERC-20 no estándar** — USDT (y otros tokens cuyo `approve` no devuelve datos) funcionan de fábrica; el ABI de approve se declara sin outputs, así la simulación de viem no falla con `0x`.
 - **Errores humanizados** — rechazar una firma vuelve silenciosamente a idle. Saldo insuficiente, cadena equivocada, nonce atascado y motivos de revert se convierten en frases cortas en lugar de un volcado de 2 KB de viem.
@@ -98,8 +111,9 @@ Iterar con `pnpm dev` (Vite + crxjs HMR).
 # Sonda DOM contra el sitio real (captura anclas y un layout JSON de muestra)
 pnpm probe
 
-# End-to-end — lanza Chromium con la extensión compilada, verifica la pestaña Lend,
-# el montaje del dashboard, la legibilidad en modo oscuro y el puente de provider
+# End-to-end — lanza Chromium con la extensión compilada. Cubre: pestaña Lend,
+# montaje del dashboard, legibilidad en modo oscuro, puente de provider, favoritos
+# (estrella + filtro) y popup de la barra (pestañas, orden, V1/V2 vault, caché)
 pnpm test:e2e
 ```
 
@@ -126,8 +140,8 @@ src/
 │   ├── sharesMath.ts         # Port de SharesMathLib (virtual shares/assets)
 │   ├── chains.ts             # Slug ↔ chain ID, wrapped-native, fallback de RPCs
 │   ├── url.ts                # Matcher de rutas (market / dashboard / list / other)
-│   ├── favorites.ts          # Store de favoritos basado en localStorage
-│   ├── graphql.ts            # Cliente de blue-api
+│   ├── favorites.ts          # Store de favoritos en chrome.storage.local + sync entre pestañas + bridge E2E
+│   ├── graphql.ts            # Cliente de blue-api (mercados, vaults V1/V2, batch + caché SWR)
 │   └── pageProvider.ts       # Cliente del puente + adaptador WalletClient de viem
 ├── ui/
 │   ├── MarketLendForm.tsx    # Formulario Supply / Withdraw de la página de mercado (con toggle de wrap)
@@ -135,6 +149,14 @@ src/
 │   ├── errorMessage.ts       # Error de viem → mensaje corto amigable
 │   ├── format.ts             # Formateadores bigint / USD / porcentaje
 │   └── styles.css            # Tokens de tema con alcance Shadow-DOM
+├── popup/
+│   ├── index.html            # Entrada del popup MV3
+│   ├── main.tsx              # React root
+│   ├── Popup.tsx             # Pestañas (Prime / Favorites), barra de orden, filas, refresh
+│   ├── TokenIcon.tsx         # Loader de iconos de token (CDN Morpho → letra fallback)
+│   └── popup.css             # Banner de marca, pestañas, filas, claro + oscuro
+├── data/
+│   └── curatedMarkets.ts     # Lista Prime curada (19 mercados, mantenida a mano)
 public/
 ├── icons/                    # Generados por scripts/make-logo.py (16/32/48/128)
 ├── logo.svg                  # Vector maestro (mariposa Morpho + insignia de enhancement)
@@ -146,7 +168,9 @@ scripts/
 tests/
 ├── probe/                    # Scrapes de DOM contra app.morpho.org
 └── e2e/
-    ├── extension.spec.ts     # E2E funcional
+    ├── extension.spec.ts     # Lend, montaje del dashboard, modo oscuro, puente de provider
+    ├── favorites.spec.ts     # Estrella + filtro + persistencia (vía bridge postMessage de test)
+    ├── popup.spec.ts         # Popup de la barra — pestañas, orden, V1/V2 vault, caché, refresh
     └── screenshots.spec.ts   # Capturas de README / store (datos mockeados)
 ```
 
@@ -155,7 +179,7 @@ tests/
 - El estado del contrato se lee por RPCs públicas (fallback de viem por 4 proveedores por cadena). Las escrituras pasan por la wallet del usuario — la extensión nunca guarda ni pide claves privadas.
 - Todas las escrituras se simulan vía `simulateContract` antes de `writeContract`, así los revert aparecen como errores legibles antes del prompt de la wallet.
 - El full-withdraw usa shares (no assets) para evitar reverts de precisión por la acumulación de intereses; el partial-withdraw usa assets con tolerancia del 0,01%.
-- Host permissions limitados a `https://app.morpho.org/*`. No se envían datos a ningún servicio salvo las RPC configuradas por el usuario, `blue-api.morpho.org` y la CDN de logos de Morpho.
+- Host permissions limitados a `https://app.morpho.org/*`. La única API de Chrome usada es `chrome.storage.local` (favoritos + caché de datos del popup); no se envían datos a ningún servicio salvo las RPC configuradas por el usuario, `blue-api.morpho.org` y la CDN de logos de Morpho (`cdn.morpho.org`).
 
 ## Limitaciones conocidas
 

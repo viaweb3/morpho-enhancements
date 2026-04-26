@@ -8,10 +8,12 @@ This Chrome extension ("Morpho Enhancements") does not collect, store, or transm
 
 - Runs **only** on pages under `https://app.morpho.org/*`.
 - Reads the page DOM to inject its own UI (a Lend tab on market pages, a Market Lending card on the dashboard, and favorites stars on the `/markets` and `/vaults` list pages).
+- Provides a toolbar popup (click the extension icon) showing live data for a curated set of Morpho markets and your starred favorites. Token logos are loaded from Morpho's CDN (`cdn.morpho.org`).
 - Uses the EIP-6963 / EIP-1193 wallet provider that the page itself already surfaces, so you can supply and withdraw without a second wallet-connect flow.
 - Queries the Morpho Blue smart contract via public JSON-RPC endpoints (viem fallback: publicnode.com, ankr.com, cloudflare-eth.com, llamarpc.com, and chain-owned RPCs).
 - Queries Morpho's public GraphQL API at `https://blue-api.morpho.org/graphql` for APY and USD values.
-- Stores the list of markets / vaults you mark as favorites in the browser's `localStorage` under the `app.morpho.org` origin (key: `morpho-ext:favorites`). This is a plain JSON array of `kind:chain:address` strings. It stays on your device, is never transmitted anywhere, and can be cleared at any time by deleting site data for `app.morpho.org`.
+- Stores the list of markets / vaults you mark as favorites in `chrome.storage.local` under the extension's own origin (key: `morpho-ext:favorites`). This is a plain JSON array of `kind:chain:address` strings. It stays on your device, is never transmitted anywhere, and can be cleared at any time by removing the extension or via `chrome://extensions → Morpho Enhancements → Site access`.
+- Stores a small cache of last-seen Morpho market and vault data (APY, TVL, utilization) in `chrome.storage.local` (key: `morpho-ext:popup-cache`) so the toolbar popup paints with last-known values instantly on next open. Cleared by the in-popup refresh button or by removing the extension. Contains no personal data — only public on-chain figures already shown by Morpho's own UI.
 
 ## What the extension does NOT do
 
