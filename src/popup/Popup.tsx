@@ -173,7 +173,7 @@ export function Popup() {
       <footer className="p-footer">
         <span className="p-footer-left">
           <span className="p-footer-dot" aria-hidden="true" />
-          live · blue-api.morpho.org
+          live · api.morpho.org
         </span>
         <a
           href="https://github.com/viaweb3/morpho-enhancements"
@@ -807,7 +807,7 @@ function shortHash(s: string): string {
   return s.length > 12 ? `${s.slice(0, 6)}…${s.slice(-4)}` : s;
 }
 
-// blue-api returns LLTV as a wei-string (e.g. "860000000000000000" for 86%).
+// Morpho API returns LLTV as a wei-string (e.g. "860000000000000000" for 86%).
 function formatLltv(raw: string | undefined): string {
   if (!raw) return '—';
   try {

@@ -1,5 +1,5 @@
 // Captures README screenshots. Masks sensitive values by intercepting the
-// Morpho blue-api GraphQL response and serving a demo payload — so React
+// Morpho API GraphQL response and serving a demo payload — so React
 // renders from mocked state and there's nothing real to scrub.
 
 import { test, chromium, type BrowserContext, type Page } from '@playwright/test';
@@ -45,7 +45,7 @@ test.afterAll(async () => {
   if (userDataDir) rmSync(userDataDir, { recursive: true, force: true });
 });
 
-// Intercept blue-api GraphQL and overwrite UserMarketPositions with a
+// Intercept Morpho API GraphQL and overwrite UserMarketPositions with a
 // hand-crafted demo payload. Everything else passes through.
 async function mockPositions(page: Page) {
   await page.route('**/graphql', async (route) => {
@@ -68,7 +68,7 @@ async function mockPositions(page: Page) {
                   collateral: '0',
                   collateralUsd: 0,
                   market: {
-                    uniqueKey:
+                    marketId:
                       '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
                     lltv: '860000000000000000',
                     loanAsset: {
@@ -95,7 +95,7 @@ async function mockPositions(page: Page) {
                   collateral: '0',
                   collateralUsd: 0,
                   market: {
-                    uniqueKey:
+                    marketId:
                       '0xcafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe',
                     lltv: '945000000000000000',
                     loanAsset: {

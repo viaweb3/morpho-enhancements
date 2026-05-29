@@ -255,7 +255,7 @@ export function DashboardSupplyCard({ address, chainIds }: Props) {
         <div style={GRID_STYLE}>
           {positions.map((p) => (
             <PositionRow
-              key={`${p.market.morphoBlue?.chain.id ?? 1}-${p.market.uniqueKey}`}
+              key={`${p.market.morphoBlue?.chain.id ?? 1}-${p.market.marketId}`}
               p={p}
             />
           ))}
@@ -270,7 +270,7 @@ function PositionRow({ p }: { p: Row }) {
   const coll = p.market.collateralAsset;
   const chainId = p.market.morphoBlue?.chain.id ?? 1;
   const chainSlug = slugFromChainId(chainId) ?? 'ethereum';
-  const marketUrl = `/${chainSlug}/market/${p.market.uniqueKey}/${(coll?.symbol ?? 'idle').toLowerCase()}-${loan.symbol.toLowerCase()}`;
+  const marketUrl = `/${chainSlug}/market/${p.market.marketId}/${(coll?.symbol ?? 'idle').toLowerCase()}-${loan.symbol.toLowerCase()}`;
   const supplied = BigInt(p.supplyAssets);
   return (
     <div
@@ -285,7 +285,7 @@ function PositionRow({ p }: { p: Row }) {
           <TokenLogo symbol={loan.symbol} />
           <span>{loan.symbol}</span>
         </div>
-        <span style={HASH_STYLE}>{shortAddress(p.market.uniqueKey)}</span>
+        <span style={HASH_STYLE}>{shortAddress(p.market.marketId)}</span>
       </div>
       <div style={STAT_ROW}>
         <span style={STAT_LABEL}>Supplied</span>

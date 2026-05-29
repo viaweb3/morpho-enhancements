@@ -34,7 +34,7 @@ export default defineManifest({
   // window.localStorage so the toolbar popup (extension origin) can read
   // the same data that the content script (app.morpho.org origin) writes.
   permissions: ['storage'],
-  // `blue-api.morpho.org` is NOT listed here: content scripts can fetch()
+  // `api.morpho.org` is NOT listed here: content scripts can fetch()
   // HTTPS URLs for CORS-enabled endpoints without a host permission, and
   // Morpho's API sends permissive CORS headers. Keeping the permission list
   // minimal makes the Chrome Web Store review simpler.

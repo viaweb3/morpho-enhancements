@@ -16,7 +16,7 @@ export interface CuratedMarket {
   chainSlug: SupportedChainSlug;
   /** Human label for the chain ("Mainnet", "Base"...). */
   chainLabel: string;
-  /** Morpho Blue marketId (a.k.a. uniqueKey, 32-byte hex). */
+  /** Morpho Blue marketId (32-byte hex). */
   marketId: string;
   /** "cbBTC/USDC" style label for quick reading. */
   label: string;

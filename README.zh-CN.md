@@ -55,13 +55,13 @@
 - **复用页面钱包** —— 不需要二次连接钱包。支持 MetaMask、Rabby、Frame、Coinbase Wallet,以及任何符合 EIP-6963 的注入钱包。
 - **兼容非标准 ERC-20** —— USDT(以及其他 `approve` 不返回数据的代币)开箱即用;approve ABI 声明为 no outputs,这样 viem 的 simulation 不会在 `0x` 上报错。
 - **错误消息人性化** —— 拒签静默回到 idle。余额不足、错链、nonce 卡住、revert 原因都会变成一句话,不是 2KB 的 viem 堆栈。
-- **零分析、零遥测、零后端** —— 直接通过公共 RPC 调用 Morpho Blue 合约,另外用 Morpho 自家的 blue-api 拿 APY 和 USD 数据。
+- **零分析、零遥测、零后端** —— 直接通过公共 RPC 调用 Morpho Blue 合约,另外用 Morpho 官方 API 拿 APY 和 USD 数据。
 
 ## 实现原理
 
 - **合约** —— 所有读写都走 Morpho Blue 单例合约 `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb`(在每条支持链上通过 CREATE2 部署在同一地址)。`idToMarketParams(id)` 把 URL 里的 market id 解析为链上参数;`supply(params, assets, 0, onBehalf, "0x")` 处理存款;`position(id, user)` + `market(id)` 提供余额计算。
 - **钱包桥** —— 一个 `world: "MAIN"` 的 content script 实现 EIP-6963 发现(含 `window.ethereum` 兼容回退),通过 `window.postMessage` 把 EIP-1193 请求代理到隔离世界的 content script。UI 在此之上构造一个 viem `WalletClient`,从不持有私钥。
-- **数据源** —— 轻量 GraphQL 查询 `https://blue-api.morpho.org/graphql` 拿 APY 和 USD。Shares-to-assets 的换算也在本地 `sharesMath.ts` 移植了一份,用于直接链上读取。
+- **数据源** —— 轻量 GraphQL 查询 `https://api.morpho.org/graphql` 拿 APY 和 USD。Shares-to-assets 的换算也在本地 `sharesMath.ts` 移植了一份,用于直接链上读取。
 - **UI** —— React 19 挂载在 Shadow DOM 里,扩展的样式不会泄漏到 Morpho 页面(反之亦然)。SPA 路由切换通过 patch `history.pushState` / `replaceState` 捕获,加上一个节流过的 `MutationObserver`,忽略动画导致的 DOM 抖动。
 
 ## 支持的链
@@ -141,7 +141,7 @@ src/
 │   ├── chains.ts             # Slug ↔ chain ID、wrapped-native、RPC 回退列表
 │   ├── url.ts                # 路由匹配器(market / dashboard / list / other)
 │   ├── favorites.ts          # 基于 chrome.storage.local 的收藏存储 + 跨 tab 同步 + E2E 桥
-│   ├── graphql.ts            # blue-api 客户端(市场、V1/V2 vault、批量 + SWR 缓存)
+│   ├── graphql.ts            # Morpho API 客户端(市场、V1/V2 vault、批量 + SWR 缓存)
 │   └── pageProvider.ts       # 桥接客户端 + viem WalletClient 适配器
 ├── ui/
 │   ├── MarketLendForm.tsx    # 市场页 Supply / Withdraw 表单(含 wrap 开关)
@@ -179,7 +179,7 @@ tests/
 - 合约状态通过公共 RPC 读取(viem 每条链 4 个 provider 回退)。写入走用户钱包 —— 扩展永远不持有、也不请求私钥。
 - 所有写调用在 `writeContract` 前都会先 `simulateContract`,让 revert 以可读错误的形式出现在钱包弹窗之前。
 - 全额取回用 shares(不是 assets),避免利息累积时的精度 revert;部分取回用 assets,误差容忍 0.01%。
-- Host permissions 限定在 `https://app.morpho.org/*`。Chrome API 只用 `chrome.storage.local`(收藏 + popup 数据缓存);除了用户自配的 RPC、`blue-api.morpho.org` 和 Morpho 的代币 logo CDN(`cdn.morpho.org`),扩展不向任何其他服务发送数据。
+- Host permissions 限定在 `https://app.morpho.org/*`。Chrome API 只用 `chrome.storage.local`(收藏 + popup 数据缓存);除了用户自配的 RPC、`api.morpho.org` 和 Morpho 的代币 logo CDN(`cdn.morpho.org`),扩展不向任何其他服务发送数据。
 
 ## 已知限制
 
