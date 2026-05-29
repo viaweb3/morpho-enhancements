@@ -55,13 +55,13 @@ A Chrome extension that fills four gaps in [app.morpho.org](https://app.morpho.o
 - **Reuses the page's wallet** — no second connect flow. Works with MetaMask, Rabby, Frame, Coinbase Wallet, and any EIP-6963–compliant injection.
 - **Non-standard ERC-20 support** — USDT (and other tokens whose `approve` returns no data) work out of the box; the approve ABI is declared with no outputs so viem's simulation doesn't fail on `0x`.
 - **Humanized errors** — rejecting a signature silently returns to idle. Insufficient balance, wrong network, stuck nonce, and revert reasons become short sentences instead of a 2 KB viem dump.
-- **No analytics, no telemetry, no hosted backend** — direct calls to the Morpho Blue contract via public RPCs, plus Morpho's own blue-api for APY/USD figures.
+- **No analytics, no telemetry, no hosted backend** — direct calls to the Morpho Blue contract via public RPCs, plus Morpho's public API for APY/USD figures.
 
 ## How it works
 
 - **Contracts** — all reads/writes go through the Morpho Blue singleton at `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb` (deterministic CREATE2 on every supported chain). `idToMarketParams(id)` resolves the URL market id to on-chain params; `supply(params, assets, 0, onBehalf, "0x")` handles the deposit; `position(id, user)` + `market(id)` feed balance math.
 - **Wallet bridge** — a `world: "MAIN"` content script implements EIP-6963 discovery (plus legacy `window.ethereum` fallback) and proxies EIP-1193 requests via `window.postMessage` to the isolated content script. The UI builds a viem `WalletClient` on top and never holds keys.
-- **Data** — lightweight GraphQL against `https://blue-api.morpho.org/graphql` for APY and USD. Shares-to-assets math is also ported locally in `sharesMath.ts` for direct on-chain reads.
+- **Data** — lightweight GraphQL against `https://api.morpho.org/graphql` for APY and USD. Shares-to-assets math is also ported locally in `sharesMath.ts` for direct on-chain reads.
 - **UI** — React 19 mounted inside a Shadow DOM so the extension's styles don't leak into (or out of) Morpho's page. SPA navigation is caught by patching `history.pushState` / `replaceState` and a throttled `MutationObserver` that ignores animation-driven churn.
 
 ## Supported chains
@@ -145,7 +145,7 @@ src/
 │   ├── chains.ts             # Slug ↔ chain ID, wrapped-native, RPC fallback list
 │   ├── url.ts                # Route matcher (market / dashboard / list / other)
 │   ├── favorites.ts          # chrome.storage.local-backed favorites + cross-tab sync + E2E bridge
-│   ├── graphql.ts            # blue-api client (markets, V1/V2 vaults, batch + SWR cache)
+│   ├── graphql.ts            # Morpho API client (markets, V1/V2 vaults, batch + SWR cache)
 │   └── pageProvider.ts       # Bridge client + viem WalletClient adapter
 ├── ui/
 │   ├── MarketLendForm.tsx    # Market-page supply / withdraw form (with wrap toggle)
@@ -183,7 +183,7 @@ tests/
 - Reads contract state via public RPC endpoints (viem fallback across 4 providers per chain). Writes go through the user's wallet — the extension never holds or requests private keys.
 - All writes are simulated via `simulateContract` before `writeContract`, so reverts surface as readable errors before the wallet prompt.
 - Full-withdraw uses shares (not assets) to avoid precision reverts on interest accrual; partial withdraw uses assets within a 0.01% tolerance.
-- Host permissions limited to `https://app.morpho.org/*`. The only Chrome API used is `chrome.storage.local` (for favorites and the popup data cache); no data is sent to any service other than the user-configured RPCs, `blue-api.morpho.org`, and Morpho's CDN (`cdn.morpho.org`) for token logos.
+- Host permissions limited to `https://app.morpho.org/*`. The only Chrome API used is `chrome.storage.local` (for favorites and the popup data cache); no data is sent to any service other than the user-configured RPCs, `api.morpho.org`, and Morpho's CDN (`cdn.morpho.org`) for token logos.
 
 ## Known limitations
 

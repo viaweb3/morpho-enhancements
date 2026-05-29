@@ -55,13 +55,13 @@
 - **Использует уже подключенный кошелёк** — без повторного connect-флоу. Поддерживает MetaMask, Rabby, Frame, Coinbase Wallet и любой EIP-6963-совместимый провайдер.
 - **Нестандартные ERC-20** — USDT (и другие токены, у которых `approve` не возвращает данных) работают из коробки; approve ABI объявлен без outputs, поэтому симуляция viem не падает на `0x`.
 - **Человеческие ошибки** — отклонение подписи тихо возвращает в idle. Недостаток баланса, не та сеть, застрявший nonce и причины revert превращаются в короткие фразы вместо 2 КБ viem-дампа.
-- **Без аналитики, телеметрии и бэкенда** — прямые вызовы контракта Morpho Blue через публичные RPC, плюс blue-api Morpho для APY/USD.
+- **Без аналитики, телеметрии и бэкенда** — прямые вызовы контракта Morpho Blue через публичные RPC, плюс публичный API Morpho для APY/USD.
 
 ## Как это работает
 
 - **Контракты** — все чтения/записи идут через синглтон Morpho Blue по адресу `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb` (детерминированный CREATE2 на всех поддерживаемых сетях). `idToMarketParams(id)` разрешает id рынка из URL в параметры on-chain; `supply(params, assets, 0, onBehalf, "0x")` обрабатывает депозит; `position(id, user)` + `market(id)` питают расчёт баланса.
 - **Мост кошелька** — content script в `world: "MAIN"` реализует обнаружение EIP-6963 (+ fallback на `window.ethereum`) и проксирует запросы EIP-1193 через `window.postMessage` к изолированному content script. Поверх строится viem `WalletClient`; ключи не удерживаются.
-- **Данные** — лёгкий GraphQL к `https://blue-api.morpho.org/graphql` для APY и USD. Математика shares↔assets также портирована локально в `sharesMath.ts` для прямых чтений on-chain.
+- **Данные** — лёгкий GraphQL к `https://api.morpho.org/graphql` для APY и USD. Математика shares↔assets также портирована локально в `sharesMath.ts` для прямых чтений on-chain.
 - **UI** — React 19, смонтированный внутри Shadow DOM, чтобы стили расширения не протекали на страницу Morpho и обратно. SPA-навигация ловится патчем `history.pushState` / `replaceState` и тротлированным `MutationObserver`-ом, игнорирующим DOM-шум от анимаций.
 
 ## Поддерживаемые сети
@@ -141,7 +141,7 @@ src/
 │   ├── chains.ts             # Slug ↔ chain ID, wrapped-native, список RPC fallback
 │   ├── url.ts                # Матчер маршрутов (market / dashboard / list / other)
 │   ├── favorites.ts          # Хранилище избранного на chrome.storage.local + кросс-таб синк + E2E мост
-│   ├── graphql.ts            # Клиент blue-api (рынки, V1/V2 vault, batch + SWR кеш)
+│   ├── graphql.ts            # Клиент Morpho API (рынки, V1/V2 vault, batch + SWR кеш)
 │   └── pageProvider.ts       # Клиент моста + адаптер viem WalletClient
 ├── ui/
 │   ├── MarketLendForm.tsx    # Форма Supply / Withdraw на странице рынка (с wrap-тумблером)
@@ -179,7 +179,7 @@ tests/
 - Состояние контракта читается через публичные RPC (fallback по 4 провайдера на сеть в viem). Записи идут через кошелёк пользователя — расширение не удерживает и не запрашивает приватные ключи.
 - Все записи симулируются через `simulateContract` перед `writeContract`, чтобы revert-ы проявлялись читаемой ошибкой до prompt-а кошелька.
 - Полный withdraw использует shares (а не assets), чтобы избежать revert-ов из-за точности при накоплении процентов; частичный withdraw использует assets с допуском 0.01%.
-- Host permissions ограничены `https://app.morpho.org/*`. Из Chrome API используется только `chrome.storage.local` (избранное + кеш данных popup). Никакие данные не отправляются кому-либо, кроме настроенных пользователем RPC, `blue-api.morpho.org` и CDN Morpho (`cdn.morpho.org`) с логотипами токенов.
+- Host permissions ограничены `https://app.morpho.org/*`. Из Chrome API используется только `chrome.storage.local` (избранное + кеш данных popup). Никакие данные не отправляются кому-либо, кроме настроенных пользователем RPC, `api.morpho.org` и CDN Morpho (`cdn.morpho.org`) с логотипами токенов.
 
 ## Известные ограничения
 

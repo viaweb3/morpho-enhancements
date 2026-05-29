@@ -1,6 +1,6 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 
-// When blue-api doesn't ship a logoURI, try Morpho's own asset CDN at
+// When Morpho API doesn't ship a logoURI, try Morpho's own asset CDN at
 // the conventional path (lowercase symbol → SVG). Most assets they list
 // follow this pattern. If that 404s too, fall through to the letter
 // avatar.

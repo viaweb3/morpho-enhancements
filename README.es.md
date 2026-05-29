@@ -55,13 +55,13 @@ Una extensión de Chrome que rellena cuatro huecos en [app.morpho.org](https://a
 - **Reutiliza la wallet de la página** — sin segundo flujo de connect. Funciona con MetaMask, Rabby, Frame, Coinbase Wallet y cualquier inyección compatible con EIP-6963.
 - **Soporte ERC-20 no estándar** — USDT (y otros tokens cuyo `approve` no devuelve datos) funcionan de fábrica; el ABI de approve se declara sin outputs, así la simulación de viem no falla con `0x`.
 - **Errores humanizados** — rechazar una firma vuelve silenciosamente a idle. Saldo insuficiente, cadena equivocada, nonce atascado y motivos de revert se convierten en frases cortas en lugar de un volcado de 2 KB de viem.
-- **Sin analytics, sin telemetría, sin backend propio** — llamadas directas al contrato Morpho Blue por RPCs públicas, más el blue-api de Morpho para APY/USD.
+- **Sin analytics, sin telemetría, sin backend propio** — llamadas directas al contrato Morpho Blue por RPCs públicas, más la API pública de Morpho para APY/USD.
 
 ## Cómo funciona
 
 - **Contratos** — todas las lecturas/escrituras pasan por el singleton Morpho Blue en `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb` (CREATE2 determinista en todas las cadenas soportadas). `idToMarketParams(id)` resuelve el id de mercado de la URL a parámetros on-chain; `supply(params, assets, 0, onBehalf, "0x")` gestiona el depósito; `position(id, user)` + `market(id)` alimentan el cálculo de balance.
 - **Puente de wallet** — un content script `world: "MAIN"` implementa descubrimiento EIP-6963 (con fallback al clásico `window.ethereum`) y redirige peticiones EIP-1193 vía `window.postMessage` al content script aislado. La UI construye por encima un `WalletClient` de viem y nunca maneja claves.
-- **Datos** — GraphQL ligero contra `https://blue-api.morpho.org/graphql` para APY y USD. La matemática shares-to-assets también está portada localmente en `sharesMath.ts` para lecturas directas on-chain.
+- **Datos** — GraphQL ligero contra `https://api.morpho.org/graphql` para APY y USD. La matemática shares-to-assets también está portada localmente en `sharesMath.ts` para lecturas directas on-chain.
 - **UI** — React 19 montado dentro de un Shadow DOM para que los estilos de la extensión no se filtren a la página de Morpho ni al revés. La navegación SPA se detecta parcheando `history.pushState` / `replaceState` y un `MutationObserver` con throttling que ignora cambios DOM por animaciones.
 
 ## Cadenas soportadas
@@ -141,7 +141,7 @@ src/
 │   ├── chains.ts             # Slug ↔ chain ID, wrapped-native, fallback de RPCs
 │   ├── url.ts                # Matcher de rutas (market / dashboard / list / other)
 │   ├── favorites.ts          # Store de favoritos en chrome.storage.local + sync entre pestañas + bridge E2E
-│   ├── graphql.ts            # Cliente de blue-api (mercados, vaults V1/V2, batch + caché SWR)
+│   ├── graphql.ts            # Cliente de Morpho API (mercados, vaults V1/V2, batch + caché SWR)
 │   └── pageProvider.ts       # Cliente del puente + adaptador WalletClient de viem
 ├── ui/
 │   ├── MarketLendForm.tsx    # Formulario Supply / Withdraw de la página de mercado (con toggle de wrap)
@@ -179,7 +179,7 @@ tests/
 - El estado del contrato se lee por RPCs públicas (fallback de viem por 4 proveedores por cadena). Las escrituras pasan por la wallet del usuario — la extensión nunca guarda ni pide claves privadas.
 - Todas las escrituras se simulan vía `simulateContract` antes de `writeContract`, así los revert aparecen como errores legibles antes del prompt de la wallet.
 - El full-withdraw usa shares (no assets) para evitar reverts de precisión por la acumulación de intereses; el partial-withdraw usa assets con tolerancia del 0,01%.
-- Host permissions limitados a `https://app.morpho.org/*`. La única API de Chrome usada es `chrome.storage.local` (favoritos + caché de datos del popup); no se envían datos a ningún servicio salvo las RPC configuradas por el usuario, `blue-api.morpho.org` y la CDN de logos de Morpho (`cdn.morpho.org`).
+- Host permissions limitados a `https://app.morpho.org/*`. La única API de Chrome usada es `chrome.storage.local` (favoritos + caché de datos del popup); no se envían datos a ningún servicio salvo las RPC configuradas por el usuario, `api.morpho.org` y la CDN de logos de Morpho (`cdn.morpho.org`).
 
 ## Limitaciones conocidas
 
