@@ -63,7 +63,8 @@ export const MORPHO_BLUE_ADDRESS =
 // Address you receive when calling deposit() on each chain's native-wrapper
 // contract (WETH9 or a WETH9-compatible clone). This is what we need for the
 // "pay with native currency" flow: wrap native → receive this token → supply.
-// Sources: chain-native wrapper contracts + morpho-blue-api-metadata tokens.json.
+// Sources: each chain's native-wrapper deployment. Supported chain IDs are
+// checked against https://docs.morpho.org/developers/api/get-started/#supported-networks.
 export const WRAPPED_NATIVE_ADDRESS: Record<SupportedChainSlug, `0x${string}`> = {
   // ETH chains — wrapping ETH yields WETH.
   ethereum: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',

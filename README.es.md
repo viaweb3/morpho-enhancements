@@ -79,7 +79,7 @@ Una extensión de Chrome que rellena cuatro huecos en [app.morpho.org](https://a
 | `katana` | 747474 | ETH / WETH |
 | `hyperevm` | 999 | HYPE / WHYPE |
 
-Los slugs provienen de `app.morpho.org/sitemap.xml`; las direcciones de [`morpho-blue-api-metadata`](https://github.com/morpho-org/morpho-blue-api-metadata).
+Los slugs de URL provienen de `app.morpho.org/sitemap.xml`; los chain IDs se contrastan con la lista oficial de [redes compatibles con Morpho API](https://docs.morpho.org/developers/api/get-started/#supported-networks). Las direcciones de contratos wrapped-native se mantienen en [`src/lib/chains.ts`](src/lib/chains.ts) y se verifican contra el deployment del native wrapper de cada red.
 
 ## Instalación
 

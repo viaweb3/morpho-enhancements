@@ -79,7 +79,7 @@ A Chrome extension that fills four gaps in [app.morpho.org](https://app.morpho.o
 | `katana` | 747474 | ETH / WETH |
 | `hyperevm` | 999 | HYPE / WHYPE |
 
-Slugs are sourced from `app.morpho.org/sitemap.xml`; addresses from [`morpho-blue-api-metadata`](https://github.com/morpho-org/morpho-blue-api-metadata).
+URL slugs come from `app.morpho.org/sitemap.xml`; chain IDs are checked against the official [Morpho API supported networks](https://docs.morpho.org/developers/api/get-started/#supported-networks). Wrapped-native contract addresses are maintained in [`src/lib/chains.ts`](src/lib/chains.ts) and verified against each chain's native wrapper deployment.
 
 ## Install
 

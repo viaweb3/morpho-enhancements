@@ -79,7 +79,7 @@
 | `katana` | 747474 | ETH / WETH |
 | `hyperevm` | 999 | HYPE / WHYPE |
 
-Slug 来源于 `app.morpho.org/sitemap.xml`;合约地址来源于 [`morpho-blue-api-metadata`](https://github.com/morpho-org/morpho-blue-api-metadata)。
+URL Slug 来源于 `app.morpho.org/sitemap.xml`；Chain ID 对照官方 [Morpho API 支持网络列表](https://docs.morpho.org/developers/api/get-started/#supported-networks)核验。Wrapped-native 合约地址维护在 [`src/lib/chains.ts`](src/lib/chains.ts)，并按各链原生包装合约的部署地址核验。
 
 ## 安装
 

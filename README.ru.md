@@ -79,7 +79,7 @@
 | `katana` | 747474 | ETH / WETH |
 | `hyperevm` | 999 | HYPE / WHYPE |
 
-Slug-и берутся из `app.morpho.org/sitemap.xml`; адреса — из [`morpho-blue-api-metadata`](https://github.com/morpho-org/morpho-blue-api-metadata).
+URL slug-и берутся из `app.morpho.org/sitemap.xml`, а chain ID сверяются с официальным [списком поддерживаемых сетей Morpho API](https://docs.morpho.org/developers/api/get-started/#supported-networks). Адреса wrapped-native контрактов поддерживаются в [`src/lib/chains.ts`](src/lib/chains.ts) и проверяются по deployment-ам native wrapper каждой сети.
 
 ## Установка
 
