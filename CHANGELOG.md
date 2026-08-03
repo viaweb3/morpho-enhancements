@@ -35,6 +35,27 @@ All notable changes to Morpho Enhancements are recorded here. Format follows
 - Added CI typecheck, unit-test, and production-build gates; release builds also
   run extension E2E before packaging.
 
+## [0.3.1] — 2026-05-29
+
+### Fixed
+
+- Updated the GraphQL client for Morpho's May 2026 API upgrade:
+  requests now target `https://api.morpho.org/graphql`, market IDs use
+  the current `marketId` field, and direct-market positions read
+  balances from `MarketPosition.state`.
+- Restored live APY, TVL, utilization, and total-supplied values in the
+  market Lend panel, dashboard Market Lending card, popup Prime tab, and
+  market Favorites rows.
+- Added a popup cache version bump so stale cached `null` results from
+  the retired schema are discarded on upgrade.
+
+### Internal
+
+- Surface Morpho API deprecation warnings from GraphQL `extensions` in
+  the console during development.
+- Refreshed documentation and privacy/publishing copy from
+  `blue-api.morpho.org` to `api.morpho.org`.
+
 ## [0.3.0] — 2026-04-26
 
 ### Added
@@ -139,6 +160,7 @@ Initial release.
 - Chrome Web Store listing images at 1280×800.
 
 [0.4.0]: https://github.com/viaweb3/morpho-enhancements/releases/tag/v0.4.0
+[0.3.1]: https://github.com/viaweb3/morpho-enhancements/releases/tag/v0.3.1
 [0.3.0]: https://github.com/viaweb3/morpho-enhancements/releases/tag/v0.3.0
 [0.2.0]: https://github.com/viaweb3/morpho-enhancements/releases/tag/v0.2.0
 [0.1.0]: https://github.com/viaweb3/morpho-enhancements/releases/tag/v0.1.0

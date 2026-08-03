@@ -55,13 +55,13 @@ A Chrome extension that fills four gaps in [app.morpho.org](https://app.morpho.o
 - **Reuses the page's wallet** — no second connect flow. Works with MetaMask, Rabby, Frame, Coinbase Wallet, and any EIP-6963–compliant injection.
 - **Non-standard ERC-20 support** — USDT (and other tokens whose `approve` returns no data) work out of the box; the approve ABI is declared with no outputs so viem's simulation doesn't fail on `0x`.
 - **Humanized errors** — rejecting a signature silently returns to idle. Insufficient balance, wrong network, stuck nonce, and revert reasons become short sentences instead of a 2 KB viem dump.
-- **No analytics, no telemetry, no hosted backend** — direct calls to the Morpho Blue contract via public RPCs, plus Morpho's own blue-api for APY/USD figures.
+- **No analytics, no telemetry, no hosted backend** — direct calls to the Morpho Blue contract via public RPCs, plus Morpho's public API for APY/USD figures.
 
 ## How it works
 
 - **Contracts** — all reads/writes go through the Morpho Blue singleton at `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb` (deterministic CREATE2 on every supported chain). `idToMarketParams(id)` resolves the URL market id to on-chain params; `supply(params, assets, 0, onBehalf, "0x")` handles the deposit; `position(id, user)` + `market(id)` feed balance math.
 - **Wallet mediation** — wallet requests travel from the isolated content script to the extension service worker. The worker validates the sender and RPC method, then performs one scoped EIP-6963 / `window.ethereum` request in `MAIN` world. Page scripts cannot invoke the wallet path through `window.postMessage`; the extension never holds keys.
-- **Data** — lightweight GraphQL against `https://blue-api.morpho.org/graphql` for APY and USD. Shares-to-assets math is also ported locally in `sharesMath.ts` for direct on-chain reads.
+- **Data** — lightweight GraphQL against `https://api.morpho.org/graphql` for APY and USD. Shares-to-assets math is also ported locally in `sharesMath.ts` for direct on-chain reads.
 - **UI** — React 19 uses a Shadow DOM for standalone dashboard widgets; the market Lend form intentionally mounts in light DOM so it can inherit Morpho's native Borrow tokens and utility classes. SPA navigation is caught by patching `history.pushState` / `replaceState` and a throttled `MutationObserver` that ignores animation-driven churn.
 
 ## Supported chains
@@ -150,7 +150,7 @@ src/
 │   ├── chains.ts             # Slug ↔ chain ID, wrapped-native, RPC fallback list
 │   ├── url.ts                # Route matcher (market / dashboard / list / other)
 │   ├── favorites.ts          # chrome.storage.local-backed favorites + cross-tab sync
-│   ├── graphql.ts            # blue-api client (markets, V1/V2 vaults, batch + SWR cache)
+│   ├── graphql.ts            # Morpho API client (markets, V1/V2 vaults, batch + SWR cache)
 │   └── pageProvider.ts       # Service-worker RPC client + viem WalletClient adapter
 ├── ui/
 │   ├── MarketLendForm.tsx    # Market-page supply / withdraw form (with wrap toggle)
@@ -186,7 +186,7 @@ tests/
 - Reads contract state via public RPC endpoints (viem fallback across 4 providers per chain). Writes go through the user's wallet — the extension never holds or requests private keys.
 - Morpho, approval, and unwrap writes are simulated before the wallet prompt; native wrapping is submitted directly and every receipt is checked for success before the next step.
 - Full-withdraw uses shares (not assets) to avoid precision reverts on interest accrual; partial withdraw uses assets within a 0.01% tolerance.
-- Host permissions are limited to `https://app.morpho.org/*`. Chrome `storage` keeps favorites/cache locally; `scripting` executes only sender-validated, allow-listed wallet RPC calls in MAIN world. No data is sent anywhere except the configured RPCs, `blue-api.morpho.org`, and Morpho's token-logo CDN.
+- Host permissions are limited to `https://app.morpho.org/*`. Chrome `storage` keeps favorites/cache locally; `scripting` executes only sender-validated, allow-listed wallet RPC calls in MAIN world. No data is sent anywhere except the configured RPCs, `api.morpho.org`, and Morpho's token-logo CDN.
 
 ## Known limitations
 

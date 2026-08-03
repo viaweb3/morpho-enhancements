@@ -1,9 +1,18 @@
-// Thin GraphQL client for blue-api.morpho.org.
+// Thin GraphQL client for api.morpho.org.
 // We use plain fetch to keep the content-script bundle small.
 
-const ENDPOINT = 'https://blue-api.morpho.org/graphql';
+const ENDPOINT = 'https://api.morpho.org/graphql';
 
 type GraphQLError = { message: string };
+type GraphQLWarning = {
+  type?: string;
+  field?: string;
+  path?: string;
+  message?: string;
+  replacement?: string;
+  deprecatedAt?: string;
+  removalAt?: string;
+};
 
 async function request<T>(query: string, variables: Record<string, unknown>): Promise<T> {
   const controller = new AbortController();
@@ -22,9 +31,16 @@ async function request<T>(query: string, variables: Record<string, unknown>): Pr
   if (!res.ok) {
     throw new Error(`GraphQL HTTP ${res.status}`);
   }
-  const json = (await res.json()) as { data?: T; errors?: GraphQLError[] };
+  const json = (await res.json()) as {
+    data?: T;
+    errors?: GraphQLError[];
+    extensions?: { warnings?: GraphQLWarning[] };
+  };
   if (json.errors?.length) {
     throw new Error(`GraphQL errors: ${json.errors.map((e) => e.message).join('; ')}`);
+  }
+  if (json.extensions?.warnings?.length) {
+    console.warn('[morpho-ext] Morpho API warnings', json.extensions.warnings);
   }
   if (!json.data) throw new Error('GraphQL returned no data');
   return json.data;
@@ -35,7 +51,7 @@ async function request<T>(query: string, variables: Record<string, unknown>): Pr
 const MARKET_BY_ID = `
   query MarketById($marketId: String!, $chainId: Int!) {
     marketById(marketId: $marketId, chainId: $chainId) {
-      uniqueKey: marketId
+      marketId
       lltv
       loanAsset { address symbol decimals logoURI }
       collateralAsset { address symbol decimals logoURI }
@@ -56,7 +72,7 @@ const USER_MARKET_POSITIONS = `
     marketPositions(
       first: 100
       skip: $skip
-      where: { userAddress_in: [$user], chainId_in: $chainIds }
+      where: { userAddress_in: [$user], chainId_in: $chainIds, supplyShares_gte: "1" }
     ) {
       items {
         state {
@@ -70,7 +86,7 @@ const USER_MARKET_POSITIONS = `
           collateralUsd
         }
         market {
-          uniqueKey: marketId
+          marketId
           lltv
           loanAsset { address symbol decimals logoURI }
           collateralAsset { address symbol decimals logoURI }
@@ -90,7 +106,7 @@ export type ApiAsset = {
 };
 
 export type ApiMarket = {
-  uniqueKey: string;
+  marketId: string;
   lltv: string;
   loanAsset: ApiAsset;
   collateralAsset: ApiAsset | null;
@@ -114,7 +130,7 @@ export type ApiMarketPosition = {
   collateral: string;
   collateralUsd: number;
   market: {
-    uniqueKey: string;
+    marketId: string;
     lltv: string;
     loanAsset: ApiAsset;
     collateralAsset: ApiAsset | null;
@@ -123,45 +139,78 @@ export type ApiMarketPosition = {
   };
 };
 
-type RawApiMarketPosition = Omit<
-  ApiMarketPosition,
-  | 'supplyShares'
-  | 'supplyAssets'
-  | 'supplyAssetsUsd'
-  | 'borrowShares'
-  | 'borrowAssets'
-  | 'borrowAssetsUsd'
-  | 'collateral'
-  | 'collateralUsd'
-> & {
-  state: {
-    supplyShares: string;
-    supplyAssets: string | null;
-    supplyAssetsUsd: number | null;
-    borrowShares: string;
-    borrowAssets: string | null;
-    borrowAssetsUsd: number | null;
-    collateral: string;
-    collateralUsd: number | null;
-  } | null;
+type BigIntish = string | number | bigint | null | undefined;
+
+type RawApiMarket = Omit<ApiMarket, 'marketId'> & {
+  marketId?: string;
+  uniqueKey?: string;
 };
 
+type RawApiMarketPosition = Partial<Omit<ApiMarketPosition, 'market'>> & {
+  state?: Partial<Omit<ApiMarketPosition, 'market'>> | null;
+  market: Omit<ApiMarketPosition['market'], 'marketId'> & {
+    marketId?: string;
+    uniqueKey?: string;
+  };
+};
+
+function bigintishToString(value: BigIntish): string {
+  if (value === null || value === undefined) return '0';
+  return String(value);
+}
+
+function nullableNumber(value: number | null | undefined): number {
+  return value ?? 0;
+}
+
+function marketIdFromRaw(market: { marketId?: string; uniqueKey?: string }): string {
+  return market.marketId ?? market.uniqueKey ?? '';
+}
+
+function normalizeMarket(market: RawApiMarket): ApiMarket {
+  const { uniqueKey: _oldUniqueKey, ...rest } = market;
+  return {
+    ...rest,
+    marketId: marketIdFromRaw(market),
+  };
+}
+
+function normalizeMarketPosition(p: RawApiMarketPosition): ApiMarketPosition {
+  // Morpho API moved position amounts under `state` in May 2026. Keep support
+  // for the old flat shape so older fixtures remain valid.
+  const state = p.state ?? p;
+  const { uniqueKey: _oldUniqueKey, ...market } = p.market;
+  return {
+    supplyShares: bigintishToString(state.supplyShares),
+    supplyAssets: bigintishToString(state.supplyAssets),
+    supplyAssetsUsd: nullableNumber(state.supplyAssetsUsd),
+    borrowShares: bigintishToString(state.borrowShares),
+    borrowAssets: bigintishToString(state.borrowAssets),
+    borrowAssetsUsd: nullableNumber(state.borrowAssetsUsd),
+    collateral: bigintishToString(state.collateral),
+    collateralUsd: nullableNumber(state.collateralUsd),
+    market: {
+      ...market,
+      marketId: marketIdFromRaw(p.market),
+    },
+  };
+}
 export async function fetchMarketById(
   marketId: string,
   chainId: number,
 ): Promise<ApiMarket | null> {
-  const data = await request<{ marketById: ApiMarket | null }>(MARKET_BY_ID, {
+  const data = await request<{ marketById: RawApiMarket | null }>(MARKET_BY_ID, {
     marketId,
     chainId,
   });
-  return data.marketById;
+  return data.marketById ? normalizeMarket(data.marketById) : null;
 }
 
 export async function fetchUserMarketPositions(
   user: string,
   chainIds: number | readonly number[],
 ): Promise<ApiMarketPosition[]> {
-  // blue-api requires lowercase addresses — EIP-55 checksum fails validation.
+  // Morpho API requires lowercase addresses — EIP-55 checksum fails validation.
   const ids = Array.isArray(chainIds) ? chainIds : [chainIds];
   const positions: ApiMarketPosition[] = [];
   for (let skip = 0; skip < 10_000; skip += 100) {
@@ -173,17 +222,7 @@ export async function fetchUserMarketPositions(
       skip,
     });
     const items = data.marketPositions?.items ?? [];
-    positions.push(...items.map(({ state, ...position }) => ({
-      ...position,
-      supplyShares: state?.supplyShares ?? '0',
-      supplyAssets: state?.supplyAssets ?? '0',
-      supplyAssetsUsd: state?.supplyAssetsUsd ?? 0,
-      borrowShares: state?.borrowShares ?? '0',
-      borrowAssets: state?.borrowAssets ?? '0',
-      borrowAssetsUsd: state?.borrowAssetsUsd ?? 0,
-      collateral: state?.collateral ?? '0',
-      collateralUsd: state?.collateralUsd ?? 0,
-    })));
+    positions.push(...items.map(normalizeMarketPosition));
     if (items.length < 100) return positions;
   }
   throw new Error('Position query exceeded the 10,000-item safety limit');
@@ -211,6 +250,7 @@ export interface MarketBatchResult {
 //      memory map at module init via `cacheReady`.
 const FRESH_TTL_MS = 5 * 60 * 1000; // 5 min — markets don't drift that fast
 const PERSIST_KEY = 'morpho-ext:popup-cache';
+const PERSIST_VERSION = 2;
 
 interface CacheEntry<T> {
   at: number;
@@ -232,6 +272,7 @@ function vaultCacheKey(ref: VaultRef): string {
 }
 
 interface PersistedShape {
+  version?: number;
   markets: Record<string, CacheEntry<ApiMarket>>;
   vaults: Record<string, CacheEntry<ApiVault>>;
 }
@@ -242,6 +283,10 @@ async function loadPersistedCache(): Promise<void> {
     const result = await chrome.storage.local.get(PERSIST_KEY);
     const raw = result[PERSIST_KEY] as PersistedShape | undefined;
     if (!raw) return;
+    if (raw.version !== PERSIST_VERSION) {
+      await chrome.storage.local.remove(PERSIST_KEY);
+      return;
+    }
     for (const [k, v] of Object.entries(raw.markets ?? {})) {
       if (v && typeof v.at === 'number') marketCache.set(k, v);
     }
@@ -263,6 +308,7 @@ function schedulePersist(): void {
   persistTimer = setTimeout(() => {
     persistTimer = null;
     const payload: PersistedShape = {
+      version: PERSIST_VERSION,
       markets: Object.fromEntries(marketCache),
       vaults: Object.fromEntries(vaultCache),
     };
@@ -375,7 +421,7 @@ async function fetchMarketsForChain(
     variables[variable] = ref.marketId;
     fields.push(`
       market${index}: marketById(marketId: $${variable}, chainId: $chainId) {
-        uniqueKey: marketId
+        marketId
         lltv
         loanAsset { address symbol decimals logoURI }
         collateralAsset { address symbol decimals logoURI }
@@ -384,15 +430,18 @@ async function fetchMarketsForChain(
     `);
   });
   const query = `query MarketsBatch(${declarations.join(', ')}) { ${fields.join('\n')} }`;
-  const data = await request<Record<string, ApiMarket | null>>(query, variables);
+  const data = await request<Record<string, RawApiMarket | null>>(query, variables);
   const result = new Map<string, ApiMarket | null>();
-  refs.forEach((ref, index) => result.set(marketCacheKey(ref), data[`market${index}`] ?? null));
+  refs.forEach((ref, index) => {
+    const market = data[`market${index}`];
+    result.set(marketCacheKey(ref), market ? normalizeMarket(market) : null);
+  });
   return result;
 }
 
 // --- Vault query (used by the popup's Favorites tab) ---
 
-// blue-api exposes V1 vaults under `vaultByAddress` and V2 vaults under
+// Morpho API exposes V1 vaults under `vaultByAddress` and V2 vaults under
 // `vaultV2ByAddress`. Favorite URLs don't disambiguate. We can't combine
 // both in one request: the server raises a hard `NOT_FOUND` GraphQL
 // error when either resolver misses, which voids the entire response

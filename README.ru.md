@@ -55,13 +55,13 @@
 - **Использует уже подключенный кошелёк** — без повторного connect-флоу. Поддерживает MetaMask, Rabby, Frame, Coinbase Wallet и любой EIP-6963-совместимый провайдер.
 - **Нестандартные ERC-20** — USDT (и другие токены, у которых `approve` не возвращает данных) работают из коробки; approve ABI объявлен без outputs, поэтому симуляция viem не падает на `0x`.
 - **Человеческие ошибки** — отклонение подписи тихо возвращает в idle. Недостаток баланса, не та сеть, застрявший nonce и причины revert превращаются в короткие фразы вместо 2 КБ viem-дампа.
-- **Без аналитики, телеметрии и бэкенда** — прямые вызовы контракта Morpho Blue через публичные RPC, плюс blue-api Morpho для APY/USD.
+- **Без аналитики, телеметрии и бэкенда** — прямые вызовы контракта Morpho Blue через публичные RPC, плюс публичный API Morpho для APY/USD.
 
 ## Как это работает
 
 - **Контракты** — все чтения/записи идут через синглтон Morpho Blue по адресу `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb` (детерминированный CREATE2 на всех поддерживаемых сетях). `idToMarketParams(id)` разрешает id рынка из URL в параметры on-chain; `supply(params, assets, 0, onBehalf, "0x")` обрабатывает депозит; `position(id, user)` + `market(id)` питают расчёт баланса.
 - **Посредник кошелька** — запросы идут из изолированного content script в service worker расширения. Worker проверяет отправителя и метод RPC, затем выполняет ограниченный запрос EIP-6963 / `window.ethereum` в `MAIN` world. Скрипты страницы не могут вызвать кошелёк через `window.postMessage`; ключи не удерживаются.
-- **Данные** — лёгкий GraphQL к `https://blue-api.morpho.org/graphql` для APY и USD. Математика shares↔assets также портирована локально в `sharesMath.ts` для прямых чтений on-chain.
+- **Данные** — лёгкий GraphQL к `https://api.morpho.org/graphql` для APY и USD. Математика shares↔assets также портирована локально в `sharesMath.ts` для прямых чтений on-chain.
 - **UI** — отдельные Dashboard-виджеты используют React 19 + Shadow DOM; форма Lend на странице рынка намеренно монтируется в light DOM, чтобы наследовать нативные design tokens и utility classes формы Borrow. SPA-навигация отслеживается патчем `history.pushState` / `replaceState` и тротлированным `MutationObserver`, игнорирующим DOM-шум от анимаций.
 
 ## Поддерживаемые сети
@@ -146,7 +146,7 @@ src/
 │   ├── chains.ts             # Slug ↔ chain ID, wrapped-native, список RPC fallback
 │   ├── url.ts                # Матчер маршрутов (market / dashboard / list / other)
 │   ├── favorites.ts          # Хранилище избранного на chrome.storage.local + кросс-таб синк
-│   ├── graphql.ts            # Клиент blue-api (рынки, V1/V2 vault, batch + SWR кеш)
+│   ├── graphql.ts            # Клиент Morpho API (рынки, V1/V2 vault, batch + SWR кеш)
 │   └── pageProvider.ts       # Клиент service-worker RPC + адаптер viem WalletClient
 ├── ui/
 │   ├── MarketLendForm.tsx    # Форма Supply / Withdraw на странице рынка (с wrap-тумблером)
@@ -182,7 +182,7 @@ tests/
 - Состояние контракта читается через публичные RPC (fallback по 4 провайдера на сеть в viem). Записи идут через кошелёк пользователя — расширение не удерживает и не запрашивает приватные ключи.
 - Записи Morpho, approve и unwrap симулируются до prompt-а кошелька; native wrap отправляется напрямую. Перед следующим шагом проверяется успешный receipt каждой транзакции.
 - Полный withdraw использует shares (а не assets), чтобы избежать revert-ов из-за точности при накоплении процентов; частичный withdraw использует assets с допуском 0.01%.
-- Host permissions ограничены `https://app.morpho.org/*`. `storage` локально хранит избранное и кеш; `scripting` выполняет только wallet RPC с проверенным sender и allow-list методов. Данные уходят лишь в настроенные RPC, `blue-api.morpho.org` и CDN логотипов Morpho.
+- Host permissions ограничены `https://app.morpho.org/*`. `storage` локально хранит избранное и кеш; `scripting` выполняет только wallet RPC с проверенным sender и allow-list методов. Данные уходят лишь в настроенные RPC, `api.morpho.org` и CDN логотипов Morpho.
 
 ## Известные ограничения
 

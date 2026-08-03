@@ -55,13 +55,13 @@
 - **复用页面钱包** —— 不需要二次连接钱包。支持 MetaMask、Rabby、Frame、Coinbase Wallet,以及任何符合 EIP-6963 的注入钱包。
 - **兼容非标准 ERC-20** —— USDT(以及其他 `approve` 不返回数据的代币)开箱即用;approve ABI 声明为 no outputs,这样 viem 的 simulation 不会在 `0x` 上报错。
 - **错误消息人性化** —— 拒签静默回到 idle。余额不足、错链、nonce 卡住、revert 原因都会变成一句话,不是 2KB 的 viem 堆栈。
-- **零分析、零遥测、零后端** —— 直接通过公共 RPC 调用 Morpho Blue 合约,另外用 Morpho 自家的 blue-api 拿 APY 和 USD 数据。
+- **零分析、零遥测、零后端** —— 直接通过公共 RPC 调用 Morpho Blue 合约,另外用 Morpho 官方 API 拿 APY 和 USD 数据。
 
 ## 实现原理
 
 - **合约** —— 所有读写都走 Morpho Blue 单例合约 `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb`(在每条支持链上通过 CREATE2 部署在同一地址)。`idToMarketParams(id)` 把 URL 里的 market id 解析为链上参数;`supply(params, assets, 0, onBehalf, "0x")` 处理存款;`position(id, user)` + `market(id)` 提供余额计算。
 - **钱包调用隔离** —— 钱包请求由隔离世界的 content script 发给扩展后台。后台验证发送者和 RPC 方法后，才在 `MAIN` world 执行一次受限的 EIP-6963 / `window.ethereum` 请求。页面脚本无法通过 `window.postMessage` 调用钱包路径，扩展也从不持有私钥。
-- **数据源** —— 轻量 GraphQL 查询 `https://blue-api.morpho.org/graphql` 拿 APY 和 USD。Shares-to-assets 的换算也在本地 `sharesMath.ts` 移植了一份,用于直接链上读取。
+- **数据源** —— 轻量 GraphQL 查询 `https://api.morpho.org/graphql` 拿 APY 和 USD。Shares-to-assets 的换算也在本地 `sharesMath.ts` 移植了一份,用于直接链上读取。
 - **UI** —— 独立的 Dashboard 组件使用 React 19 + Shadow DOM；市场 Lend 表单则有意挂载在 light DOM，以继承 Morpho 原生 Borrow 的设计 token 和工具类。SPA 路由切换通过 patch `history.pushState` / `replaceState` 捕获，并用节流后的 `MutationObserver` 忽略动画造成的 DOM 抖动。
 
 ## 支持的链
@@ -145,7 +145,7 @@ src/
 │   ├── chains.ts             # Slug ↔ chain ID、wrapped-native、RPC 回退列表
 │   ├── url.ts                # 路由匹配器(market / dashboard / list / other)
 │   ├── favorites.ts          # 基于 chrome.storage.local 的收藏存储 + 跨 tab 同步
-│   ├── graphql.ts            # blue-api 客户端(市场、V1/V2 vault、批量 + SWR 缓存)
+│   ├── graphql.ts            # Morpho API 客户端(市场、V1/V2 vault、批量 + SWR 缓存)
 │   └── pageProvider.ts       # 扩展后台 RPC 客户端 + viem WalletClient 适配器
 ├── ui/
 │   ├── MarketLendForm.tsx    # 市场页 Supply / Withdraw 表单(含 wrap 开关)
@@ -181,7 +181,7 @@ tests/
 - 合约状态通过公共 RPC 读取(viem 每条链 4 个 provider 回退)。写入走用户钱包 —— 扩展永远不持有、也不请求私钥。
 - Morpho、approve 和 unwrap 写调用会在钱包确认前模拟；原生 wrap 直接提交，并且每一步都会确认交易收据成功后才继续。
 - 全额取回用 shares(不是 assets),避免利息累积时的精度 revert;部分取回用 assets,误差容忍 0.01%。
-- Host permissions 限定在 `https://app.morpho.org/*`。`storage` 只在本地保存收藏和缓存；`scripting` 只执行经过发送者校验和方法白名单限制的钱包 RPC。除配置的 RPC、`blue-api.morpho.org` 和 Morpho 代币 logo CDN 外，扩展不向其他服务发送数据。
+- Host permissions 限定在 `https://app.morpho.org/*`。`storage` 只在本地保存收藏和缓存；`scripting` 只执行经过发送者校验和方法白名单限制的钱包 RPC。除配置的 RPC、`api.morpho.org` 和 Morpho 代币 logo CDN 外，扩展不向其他服务发送数据。
 
 ## 已知限制
 

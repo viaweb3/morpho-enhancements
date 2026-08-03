@@ -17,7 +17,11 @@ test.afterEach(() => {
 test('dashboard positions are fetched through all pages', async () => {
   const requests: number[] = [];
   globalThis.fetch = (async (_input, init) => {
-    const body = JSON.parse(String(init?.body)) as { variables: { skip: number } };
+    const body = JSON.parse(String(init?.body)) as {
+      query: string;
+      variables: { skip: number };
+    };
+    expect(body.query).toContain('supplyShares_gte: "1"');
     requests.push(body.variables.skip);
     const count = body.variables.skip === 0 ? 100 : 2;
     const items = Array.from({ length: count }, (_, index) => ({
@@ -30,6 +34,19 @@ test('dashboard positions are fetched through all pages', async () => {
         borrowAssetsUsd: 0,
         collateral: '0',
         collateralUsd: 0,
+      },
+      market: {
+        marketId: `0x${String(index).padStart(64, '0')}`,
+        lltv: '860000000000000000',
+        loanAsset: {
+          address: `0x${'1'.repeat(40)}`,
+          symbol: 'USDC',
+          decimals: 6,
+          logoURI: null,
+        },
+        collateralAsset: null,
+        state: null,
+        morphoBlue: { chain: { id: 1 } },
       },
     }));
     return new Response(JSON.stringify({ data: { marketPositions: { items } } }), {
@@ -45,14 +62,15 @@ test('dashboard positions are fetched through all pages', async () => {
     supplyAssets: '0',
     supplyAssetsUsd: 0,
     borrowShares: '0',
+    market: { marketId: `0x${'0'.repeat(64)}` },
   });
   expect(requests).toEqual([0, 100]);
 });
 
 test('popup markets on the same chain use one GraphQL request', async () => {
   let requestCount = 0;
-  const market = (uniqueKey: string): ApiMarket => ({
-    uniqueKey,
+  const market = (marketId: string): ApiMarket => ({
+    marketId,
     lltv: '860000000000000000',
     loanAsset: { address: `0x${'1'.repeat(40)}`, symbol: 'USDC', decimals: 6, logoURI: null },
     collateralAsset: null,
@@ -82,7 +100,7 @@ test('popup markets on the same chain use one GraphQL request', async () => {
   ];
   const result = await fetchMarketsBatch(refs);
   expect(requestCount).toBe(1);
-  expect(result.map((item) => item.market?.uniqueKey)).toEqual(refs.map((item) => item.marketId));
+  expect(result.map((item) => item.market?.marketId)).toEqual(refs.map((item) => item.marketId));
 });
 
 test('popup market batches split by chain, deduplicate network fields, and preserve order', async () => {
@@ -100,7 +118,7 @@ test('popup market batches split by chain, deduplicate network fields, and prese
       fieldCount: (body.query.match(/market\d+:/g) ?? []).length,
     });
     const data = Object.fromEntries(ids.map((id, index) => [`market${index}`, {
-      uniqueKey: id,
+      marketId: id,
       lltv: '0',
       loanAsset: { address: `0x${'1'.repeat(40)}`, symbol: 'USDC', decimals: 6, logoURI: null },
       collateralAsset: null,
@@ -125,11 +143,14 @@ test('popup market batches split by chain, deduplicate network fields, and prese
     { chainId: 1, fieldCount: 1 },
     { chainId: 8453, fieldCount: 1 },
   ]));
-  expect(result.map(({ market }) => market?.uniqueKey)).toEqual([first, second, first]);
+  expect(result.map(({ market }) => market?.marketId)).toEqual([first, second, first]);
 });
 
 test('GraphQL HTTP and schema errors are surfaced', async () => {
-  globalThis.fetch = (async () => new Response('unavailable', { status: 503 })) as typeof fetch;
+  globalThis.fetch = (async (input) => {
+    expect(String(input)).toBe('https://api.morpho.org/graphql');
+    return new Response('unavailable', { status: 503 });
+  }) as typeof fetch;
   await expect(fetchMarketById(`0x${'a'.repeat(64)}`, 1)).rejects.toThrow('GraphQL HTTP 503');
 
   globalThis.fetch = (async () => new Response(JSON.stringify({

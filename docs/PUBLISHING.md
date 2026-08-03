@@ -103,10 +103,10 @@ The dashboard will ask a handful of narrowed-down questions. For this extension 
   - `host_permissions: https://app.morpho.org/*` — "Required to inject UI and read DOM on Morpho's own pages; the only site this extension touches."
   - `permissions: storage` — "Persists the user's market/vault favorites and a small cache of public on-chain figures (APY, TVL) so the toolbar popup paints with last-known data instantly. Stored locally in `chrome.storage.local`; never transmitted."
   - `permissions: scripting` — "Executes a single allow-listed wallet RPC request in the page's MAIN world after the extension service worker validates that it came from this extension's top-frame content script on app.morpho.org."
-- **Remote code use**: No remote code is executed. The extension ships all JS in the ZIP; it calls HTTPS endpoints for JSON data only (RPC + Morpho blue-api).
+- **Remote code use**: No remote code is executed. The extension ships all JS in the ZIP; it calls HTTPS endpoints for JSON data only (RPC + Morpho API).
 - **Data handling**:
   - Does not collect or transmit personal info, authentication info, location, health, financial-personal info, or user activity / web history beyond what's needed to render the injected UI on the one permitted host.
-  - The wallet address the user connects is visible in-memory for the session but never leaves the device except in RPC / blue-api requests that are part of the normal protocol interaction.
+  - The wallet address the user connects is visible in-memory for the session but never leaves the device except in RPC / Morpho API requests that are part of the normal protocol interaction.
 - **Privacy policy URL**: required even for a no-data extension. Host [`docs/PRIVACY.md`](./PRIVACY.md) as an HTML page on GitHub Pages or your own domain and paste the URL.
 
 ## 6. Distribution

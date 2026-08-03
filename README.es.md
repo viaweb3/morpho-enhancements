@@ -55,13 +55,13 @@ Una extensión de Chrome que rellena cuatro huecos en [app.morpho.org](https://a
 - **Reutiliza la wallet de la página** — sin segundo flujo de connect. Funciona con MetaMask, Rabby, Frame, Coinbase Wallet y cualquier inyección compatible con EIP-6963.
 - **Soporte ERC-20 no estándar** — USDT (y otros tokens cuyo `approve` no devuelve datos) funcionan de fábrica; el ABI de approve se declara sin outputs, así la simulación de viem no falla con `0x`.
 - **Errores humanizados** — rechazar una firma vuelve silenciosamente a idle. Saldo insuficiente, cadena equivocada, nonce atascado y motivos de revert se convierten en frases cortas en lugar de un volcado de 2 KB de viem.
-- **Sin analytics, sin telemetría, sin backend propio** — llamadas directas al contrato Morpho Blue por RPCs públicas, más el blue-api de Morpho para APY/USD.
+- **Sin analytics, sin telemetría, sin backend propio** — llamadas directas al contrato Morpho Blue por RPCs públicas, más la API pública de Morpho para APY/USD.
 
 ## Cómo funciona
 
 - **Contratos** — todas las lecturas/escrituras pasan por el singleton Morpho Blue en `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb` (CREATE2 determinista en todas las cadenas soportadas). `idToMarketParams(id)` resuelve el id de mercado de la URL a parámetros on-chain; `supply(params, assets, 0, onBehalf, "0x")` gestiona el depósito; `position(id, user)` + `market(id)` alimentan el cálculo de balance.
 - **Mediación de wallet** — las solicitudes pasan del content script aislado al service worker de la extensión. El worker valida el origen y el método RPC antes de ejecutar una solicitud limitada EIP-6963 / `window.ethereum` en `MAIN` world. Los scripts de la página no pueden invocar el wallet mediante `window.postMessage`; la extensión nunca maneja claves.
-- **Datos** — GraphQL ligero contra `https://blue-api.morpho.org/graphql` para APY y USD. La matemática shares-to-assets también está portada localmente en `sharesMath.ts` para lecturas directas on-chain.
+- **Datos** — GraphQL ligero contra `https://api.morpho.org/graphql` para APY y USD. La matemática shares-to-assets también está portada localmente en `sharesMath.ts` para lecturas directas on-chain.
 - **UI** — los widgets independientes del Dashboard usan React 19 + Shadow DOM; el formulario Lend del mercado se monta deliberadamente en light DOM para heredar los design tokens y utility classes nativos de Borrow. La navegación SPA se detecta parcheando `history.pushState` / `replaceState` y un `MutationObserver` con throttling que ignora cambios DOM por animaciones.
 
 ## Cadenas soportadas
@@ -146,7 +146,7 @@ src/
 │   ├── chains.ts             # Slug ↔ chain ID, wrapped-native, fallback de RPCs
 │   ├── url.ts                # Matcher de rutas (market / dashboard / list / other)
 │   ├── favorites.ts          # Store de favoritos en chrome.storage.local + sync entre pestañas
-│   ├── graphql.ts            # Cliente de blue-api (mercados, vaults V1/V2, batch + caché SWR)
+│   ├── graphql.ts            # Cliente de Morpho API (mercados, vaults V1/V2, batch + caché SWR)
 │   └── pageProvider.ts       # Cliente RPC del service worker + adaptador WalletClient de viem
 ├── ui/
 │   ├── MarketLendForm.tsx    # Formulario Supply / Withdraw de la página de mercado (con toggle de wrap)
@@ -182,7 +182,7 @@ tests/
 - El estado del contrato se lee por RPCs públicas (fallback de viem por 4 proveedores por cadena). Las escrituras pasan por la wallet del usuario — la extensión nunca guarda ni pide claves privadas.
 - Las escrituras Morpho, approve y unwrap se simulan antes del prompt; el native wrap se envía directamente. Cada receipt debe confirmar éxito antes de continuar.
 - El full-withdraw usa shares (no assets) para evitar reverts de precisión por la acumulación de intereses; el partial-withdraw usa assets con tolerancia del 0,01%.
-- Host permissions limitados a `https://app.morpho.org/*`. `storage` guarda favoritos y caché localmente; `scripting` solo ejecuta wallet RPC con sender validado y métodos allow-listed. Los datos solo salen hacia las RPC configuradas, `blue-api.morpho.org` y la CDN de logos de Morpho.
+- Host permissions limitados a `https://app.morpho.org/*`. `storage` guarda favoritos y caché localmente; `scripting` solo ejecuta wallet RPC con sender validado y métodos allow-listed. Los datos solo salen hacia las RPC configuradas, `api.morpho.org` y la CDN de logos de Morpho.
 
 ## Limitaciones conocidas
 

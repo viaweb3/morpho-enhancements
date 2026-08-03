@@ -55,13 +55,13 @@
 - **페이지 지갑 재사용** — 두 번째 connect 흐름 없음. MetaMask, Rabby, Frame, Coinbase Wallet, EIP-6963 호환 주입 지갑 모두 지원.
 - **비표준 ERC-20 지원** — USDT(및 `approve` 가 데이터를 반환하지 않는 기타 토큰)가 그대로 동작합니다. approve ABI 를 no outputs 로 선언하여 viem 의 simulation 이 `0x` 에서 실패하지 않습니다.
 - **사람이 읽을 수 있는 에러** — 서명 거부는 조용히 idle 로 복귀. 잔액 부족, 잘못된 체인, nonce 막힘, revert 사유는 2KB viem 덤프가 아닌 짧은 문장으로 표시됩니다.
-- **분석·텔레메트리·백엔드 없음** — public RPC 로 Morpho Blue 컨트랙트 직접 호출, APY / USD 수치만 Morpho 공식 blue-api 로 가져옵니다.
+- **분석·텔레메트리·백엔드 없음** — public RPC 로 Morpho Blue 컨트랙트 직접 호출, APY / USD 수치만 Morpho 공식 API 로 가져옵니다.
 
 ## 동작 방식
 
 - **컨트랙트** — 모든 읽기/쓰기는 Morpho Blue 싱글톤 `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb` (지원 체인 전체에서 CREATE2 로 동일 주소) 를 통해 이뤄집니다. `idToMarketParams(id)` 로 URL 의 market id 를 온체인 파라미터로 해석하고, `supply(params, assets, 0, onBehalf, "0x")` 로 예치, `position(id, user)` + `market(id)` 로 잔액 계산.
 - **지갑 호출 중계** — wallet request 는 isolated content script 에서 extension service worker 로 전달됩니다. worker 가 발신자와 RPC method 를 검증한 뒤 `MAIN` world 에서 제한된 EIP-6963 / `window.ethereum` request 를 실행합니다. 페이지 script 는 `window.postMessage` 로 wallet path 를 호출할 수 없으며 확장은 키를 보유하지 않습니다.
-- **데이터** — `https://blue-api.morpho.org/graphql` 에 대한 경량 GraphQL 로 APY 와 USD 를 조회. Shares-to-assets 계산은 직접 온체인 read 를 위해 `sharesMath.ts` 에도 로컬 포팅되어 있습니다.
+- **데이터** — `https://api.morpho.org/graphql` 에 대한 경량 GraphQL 로 APY 와 USD 를 조회. Shares-to-assets 계산은 직접 온체인 read 를 위해 `sharesMath.ts` 에도 로컬 포팅되어 있습니다.
 - **UI** — 독립 Dashboard widget 은 React 19 + Shadow DOM 을 사용하고, market Lend form 은 Morpho 기본 Borrow design token 과 utility class 를 상속하도록 light DOM 에 마운트됩니다. SPA 전환은 `history.pushState` / `replaceState` 패치와 animation 기반 변동을 무시하는 throttle 된 `MutationObserver` 로 포착합니다.
 
 ## 지원 체인
@@ -146,7 +146,7 @@ src/
 │   ├── chains.ts             # Slug ↔ chain ID, wrapped-native, RPC 폴백 목록
 │   ├── url.ts                # 라우트 매처 (market / dashboard / list / other)
 │   ├── favorites.ts          # chrome.storage.local 기반 즐겨찾기 + 탭 간 동기화
-│   ├── graphql.ts            # blue-api 클라이언트(마켓, V1/V2 vault, 배치 + SWR 캐시)
+│   ├── graphql.ts            # Morpho API 클라이언트(마켓, V1/V2 vault, 배치 + SWR 캐시)
 │   └── pageProvider.ts       # service-worker RPC client + viem WalletClient adapter
 ├── ui/
 │   ├── MarketLendForm.tsx    # 마켓 페이지 Supply / Withdraw 폼 (wrap 토글 포함)
@@ -182,7 +182,7 @@ tests/
 - 컨트랙트 상태는 public RPC 로 읽습니다 (viem 가 체인별 4 개 provider 폴백). 쓰기는 사용자 지갑을 거치며, 확장은 개인키를 보유하거나 요청하지 않습니다.
 - Morpho, approve, unwrap 쓰기는 wallet prompt 전에 simulate 합니다. native wrap 은 직접 제출하며 각 receipt 성공을 확인한 뒤 다음 단계로 진행합니다.
 - 전액 출금은 이자 누적 시 정밀도 revert 를 피하기 위해 shares 기준, 부분 출금은 0.01% 허용 오차로 assets 기준을 사용합니다.
-- Host permissions 는 `https://app.morpho.org/*` 로 한정됩니다. `storage` 는 즐겨찾기와 cache 를 local 에만 저장하고, `scripting` 은 sender 검증 및 allow-list 를 통과한 wallet RPC 만 실행합니다. 설정된 RPC, `blue-api.morpho.org`, Morpho token-logo CDN 외에는 데이터를 보내지 않습니다.
+- Host permissions 는 `https://app.morpho.org/*` 로 한정됩니다. `storage` 는 즐겨찾기와 cache 를 local 에만 저장하고, `scripting` 은 sender 검증 및 allow-list 를 통과한 wallet RPC 만 실행합니다. 설정된 RPC, `api.morpho.org`, Morpho token-logo CDN 외에는 데이터를 보내지 않습니다.
 
 ## 알려진 제한
 
