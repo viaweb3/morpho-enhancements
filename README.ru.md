@@ -6,7 +6,7 @@
 
 1. **Supply / Withdraw на уровне рынка** — на страницах рынков Morpho Blue официальный UI предлагает только Borrow. Расширение добавляет вкладку **Lend** рядом с Borrow, которая кладёт заёмный актив напрямую в рынок (тот же вызов `Morpho.supply()`, что используют MetaMorpho vault-ы), а позже позволяет вывести средства — так можно получать проценты по конкретному рынку без посредничества vault-а.
 
-2. **Видимость на дашборде** — штатный дашборд показывает депозиты в vault-ы и заёмные позиции, но не прямые поставки в рынки. Расширение добавляет карточку **Market Lending**, которая показывает все рынки, где пользователь является прямым кредитором, по всем поддерживаемым Morpho сетям, с USD-стоимостью, APY и ссылкой на страницу рынка.
+2. **Видимость на дашборде** — штатный дашборд показывает депозиты в vault-ы и заёмные позиции, но не прямые поставки в рынки. Расширение добавляет карточку **Market Lending** с прямыми позициями в 10 поддерживаемых расширением сетях, USD-стоимостью, APY и ссылкой на рынок.
 
 3. **Избранное на `/variable` и `/vaults`** — звёздочка у любой строки добавляет рынок/vault в закладки, а чип **Favorites only** в нижнем левом углу фильтрует список до пары тех, что вам важны. Хранится в браузере и синхронизируется между вкладками.
 
@@ -48,18 +48,18 @@
 ## Возможности
 
 - **Вкладки Borrow | Lend** на панели рынка. Клик по Lend заменяет штатную форму на UI supply / withdraw, совпадающий со стилем Morpho в светлой и тёмной темах.
-- **Автоматический wrap ETH / WETH** — если заёмный актив является wrapped-native токеном сети, появляется переключатель, позволяющий платить нативной валютой (POL на Polygon, MON на Monad, HYPE на HyperEVM и т. д.). Расширение автоматически делает wrap перед supply и unwrap после withdraw. Всего две подписи, без отдельного UX-прохода для wrap.
-- **Мультисетевой Dashboard** — карточка Market Lending одним запросом охватывает все сети, которые поддерживает Morpho. Актуальный список сетей поддерживается в [src/lib/chains.ts](src/lib/chains.ts).
+- **Автоматический wrap ETH / WETH** — при wrapped-native заёмном активе можно платить нативной валютой. Supply требует 1–4 wallet-транзакции в зависимости от wrap, approve и сброса allowance для токенов вроде USDT; withdraw в нативную валюту — до 2.
+- **Мультисетевой Dashboard** — карточка Market Lending получает 10 поддерживаемых расширением сетей одним multi-chain API-запросом (с пагинацией после 100 позиций). Source of truth списка — [src/lib/chains.ts](src/lib/chains.ts).
 - **Избранное на страницах списков** — звезда у рынков и vault-ов в `/variable` и `/vaults`, фильтрация одним кликом. Хранится только в `chrome.storage.local` (без сервера и трекинга), синхронизируется между вкладками и popup через `chrome.storage.onChanged`.
 - **Popup на панели с двумя вкладками** — *Prime* (19 отобранных вручную blue-chip рынков по Mainnet / Base / Arbitrum / OP) и *Favorites* (избранные рынки и vault-ы; V1 и V2 MetaMorpho с маленьким чипом `V1`/`V2` в строке). Stale-while-revalidate кеш: 5 минут в памяти + персистентность в `chrome.storage.local`, поэтому повторное открытие popup сразу рисует последние данные, пока в фоне идёт свежий запрос. Сортировка по APY ↓ или TVL ↓.
-- **Использует уже подключенный кошелёк** — без повторного connect-флоу. Поддерживает MetaMask, Rabby, Frame, Coinbase Wallet и любой EIP-6963-совместимый провайдер.
+- **Использует injected wallet страницы** — без отдельной WalletConnect-сессии. Если сайт ещё не подключён, кошелёк может запросить доступ к аккаунту. Совместимо с EIP-6963 и legacy `window.ethereum`, включая MetaMask, Rabby, Frame и Coinbase Wallet.
 - **Нестандартные ERC-20** — USDT (и другие токены, у которых `approve` не возвращает данных) работают из коробки; approve ABI объявлен без outputs, поэтому симуляция viem не падает на `0x`.
 - **Человеческие ошибки** — отклонение подписи тихо возвращает в idle. Недостаток баланса, не та сеть, застрявший nonce и причины revert превращаются в короткие фразы вместо 2 КБ viem-дампа.
 - **Без аналитики, телеметрии и бэкенда** — прямые вызовы контракта Morpho Blue через публичные RPC, плюс публичный API Morpho для APY/USD.
 
 ## Как это работает
 
-- **Контракты** — все чтения/записи идут через синглтон Morpho Blue по адресу `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb` (детерминированный CREATE2 на всех поддерживаемых сетях). `idToMarketParams(id)` разрешает id рынка из URL в параметры on-chain; `supply(params, assets, 0, onBehalf, "0x")` обрабатывает депозит; `position(id, user)` + `market(id)` питают расчёт баланса.
+- **Контракты** — чтения рынка и supply/withdraw идут через Morpho Blue singleton `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb` в каждой поддерживаемой сети. `idToMarketParams(id)` разрешает параметры, `supply(...)` вносит средства, а `position(...)` + `market(...)` дают данные для баланса. Approve и wrap/unwrap напрямую вызывают loan token или native-wrapper contract.
 - **Посредник кошелька** — запросы идут из изолированного content script в service worker расширения. Worker проверяет отправителя и метод RPC, затем выполняет ограниченный запрос EIP-6963 / `window.ethereum` в `MAIN` world. Скрипты страницы не могут вызвать кошелёк через `window.postMessage`; ключи не удерживаются.
 - **Данные** — лёгкий GraphQL к `https://api.morpho.org/graphql` для APY и USD. Математика shares↔assets также портирована локально в `sharesMath.ts` для прямых чтений on-chain.
 - **UI** — отдельные Dashboard-виджеты используют React 19 + Shadow DOM; форма Lend на странице рынка намеренно монтируется в light DOM, чтобы наследовать нативные design tokens и utility classes формы Borrow. SPA-навигация отслеживается патчем `history.pushState` / `replaceState` и тротлированным `MutationObserver`, игнорирующим DOM-шум от анимаций.
@@ -81,9 +81,11 @@
 
 URL slug-и берутся из `app.morpho.org/sitemap.xml`, а chain ID сверяются с официальным [списком поддерживаемых сетей Morpho API](https://docs.morpho.org/developers/api/get-started/#supported-networks). Адреса wrapped-native контрактов поддерживаются в [`src/lib/chains.ts`](src/lib/chains.ts) и проверяются по deployment-ам native wrapper каждой сети.
 
+Сейчас расширение интегрирует 10 сетей из списка Morpho API. Robinhood Chain, Stable и Tempo перечислены API, но расширением пока не поддерживаются.
+
 ## Установка
 
-### Из GitHub Releases (рекомендуется, пока идёт модерация в Chrome Web Store)
+### Из GitHub Releases (ручная установка)
 
 Каждый тег `v*` запускает сборку GitHub Actions, которая прикрепляет ZIP к [странице Releases](../../releases). Чтобы установить:
 
@@ -93,9 +95,11 @@ URL slug-и берутся из `app.morpho.org/sitemap.xml`, а chain ID све
 4. Включите **Режим разработчика** (вверху справа)
 5. Нажмите **Загрузить распакованное расширение** → выберите распакованную папку
 
-Chrome покажет предупреждение о «расширении в режиме разработчика» — это ожидаемо для любых локально установленных расширений. После прохождения модерации в Chrome Web Store установка станет в один клик, но она занимает дни; функционально это тот же путь.
+Chrome покажет предупреждение о «расширении в режиме разработчика» — это нормально для локальной установки. Release-артефакт функционально совпадает со store build, но обновляется вручную.
 
 ### Из исходников (dev)
+
+Требуются Node.js 20+ и pnpm (lockfile использует формат pnpm 9).
 
 ```bash
 pnpm install
@@ -147,7 +151,8 @@ src/
 │   ├── url.ts                # Матчер маршрутов (market / dashboard / list / other)
 │   ├── favorites.ts          # Хранилище избранного на chrome.storage.local + кросс-таб синк
 │   ├── graphql.ts            # Клиент Morpho API (рынки, V1/V2 vault, batch + SWR кеш)
-│   └── pageProvider.ts       # Клиент service-worker RPC + адаптер viem WalletClient
+│   ├── pageProvider.ts       # Клиент service-worker RPC + адаптер viem WalletClient
+│   └── walletRpcPolicy.ts    # Проверка sender, method и params wallet RPC
 ├── ui/
 │   ├── MarketLendForm.tsx    # Форма Supply / Withdraw на странице рынка (с wrap-тумблером)
 │   ├── DashboardSupplyCard.tsx
@@ -169,8 +174,10 @@ scripts/
 ├── make-logo.py              # Регенерация иконок из morpho-base.svg
 └── morpho-base.svg           # Официальная бабочка Morpho (источник)
 tests/
-├── probe/                    # DOM-скрейпы против app.morpho.org
+├── unit/                     # Тесты маршрутов, математики, сетей, RPC policy и GraphQL
+├── probe/                    # Live DOM compatibility probes против app.morpho.org
 └── e2e/
+    ├── extensionStorage.ts   # Хелпер chrome.storage в контексте расширения
     ├── extension.spec.ts     # Lend, dashboard mount, тёмная тема, изоляция кошелька
     ├── favorites.spec.ts     # Звёзды + фильтр + хранение extension storage
     ├── popup.spec.ts         # Popup на панели — вкладки, сортировка, V1/V2 vault, кеш, refresh
@@ -179,16 +186,16 @@ tests/
 
 ## Безопасность
 
-- Состояние контракта читается через публичные RPC (fallback по 4 провайдера на сеть в viem). Записи идут через кошелёк пользователя — расширение не удерживает и не запрашивает приватные ключи.
+- Состояние контракта читается через 1–4 настроенных public RPC на сеть; при нескольких endpoint используется viem fallback. Записи идут через кошелёк пользователя — расширение не удерживает и не запрашивает приватные ключи.
 - Записи Morpho, approve и unwrap симулируются до prompt-а кошелька; native wrap отправляется напрямую. Перед следующим шагом проверяется успешный receipt каждой транзакции.
 - Полный withdraw использует shares (а не assets), чтобы избежать revert-ов из-за точности при накоплении процентов; частичный withdraw использует assets с допуском 0.01%.
 - Host permissions ограничены `https://app.morpho.org/*`. `storage` локально хранит избранное и кеш; `scripting` выполняет только wallet RPC с проверенным sender и allow-list методов. Данные уходят лишь в настроенные RPC, `api.morpho.org` и CDN логотипов Morpho.
 
 ## Известные ограничения
 
-- **Wrap-and-supply за одну транзакцию** пока не реализован. Bundler / GeneralAdapter от Morpho позволяют упаковать wrap + approve + supply в один multicall; сейчас это 2–3 подписи.
+- **Wrap-and-supply за одну транзакцию** пока не реализован. Bundler / GeneralAdapter от Morpho позволяют один multicall; сейчас это 1–4 wallet-транзакции в зависимости от wrap и allowance.
 - **Сессии только через WalletConnect**, в которых на странице не выставлен injected EIP-1193 провайдер, мост не подхватывает.
-- **Размер бандла** около 530 КБ до gzip, основное — viem. В следующем релизе будет динамический import путей чейна/контрактов viem.
+- **Размер бандла** текущей сборки v0.4.0 — около 555 KiB несжатого JavaScript (568 401 байт), в основном content/popup chunks с viem. Точный размер зависит от сборки.
 
 ## Публикация
 

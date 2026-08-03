@@ -6,7 +6,7 @@
 
 1. **마켓 단위 Supply / Withdraw** — Morpho Blue 마켓 페이지의 공식 UI 는 Borrow 만 제공합니다. 본 확장은 Borrow 옆에 **Lend** 탭을 주입해, 대출 자산을 해당 마켓에 바로 예치합니다(MetaMorpho vault 내부와 동일한 `Morpho.supply()` 호출). 같은 UI 에서 나중에 인출할 수도 있어, vault 를 거치지 않고 마켓 고유의 예치 이자를 받을 수 있습니다.
 
-2. **대시보드 가시성** — 공식 대시보드는 vault 예치와 차입 포지션만 표시하며 직접 예치는 보여주지 않습니다. 본 확장은 **Market Lending** 카드를 추가해, Morpho 지원 전 체인에서의 직접 예치를 USD 금액·APY·마켓 바로가기와 함께 표시합니다.
+2. **대시보드 가시성** — 공식 대시보드는 vault 예치와 차입 포지션만 표시하며 직접 예치는 보여주지 않습니다. 본 확장은 **Market Lending** 카드를 추가해, 확장이 지원하는 10개 체인의 직접 예치를 USD 금액·APY·마켓 바로가기와 함께 표시합니다.
 
 3. **`/variable` 와 `/vaults` 즐겨찾기** — 행 앞의 별로 아무 마켓/vault 나 북마크한 뒤, 좌측 하단의 **Favorites only** 칩으로 관심있는 몇 개만 남깁니다. 브라우저에 저장되고 탭 간 동기화됩니다.
 
@@ -48,18 +48,18 @@
 ## 기능
 
 - **Borrow | Lend 탭** — 마켓 패널에 Lend 탭이 추가됩니다. 라이트/다크 모두에서 Morpho 시각 언어에 맞춘 Supply / Withdraw UI 로 전환됩니다.
-- **ETH / WETH 자동 래핑** — 대출 자산이 해당 체인의 wrapped-native 토큰일 때, 네이티브 통화(Polygon 의 POL, Monad 의 MON, HyperEVM 의 HYPE 등)로 결제할 수 있는 토글이 나타납니다. Supply 전 자동 wrap, Withdraw 후 자동 unwrap — 서명은 총 2 회, 별도 wrap 화면 이동 없음.
-- **멀티체인 대시보드** — Market Lending 카드는 Morpho 가 지원하는 모든 체인을 한 번의 요청으로 조회합니다. 실제 체인 목록은 [src/lib/chains.ts](src/lib/chains.ts) 에 관리됩니다.
+- **ETH / WETH 자동 래핑** — 대출 자산이 해당 체인의 wrapped-native 토큰일 때 네이티브 통화로 결제할 수 있습니다. Supply 는 wrap, approve, USDT 같은 토큰의 allowance reset 필요 여부에 따라 1–4개 wallet transaction, native withdraw 는 최대 2개입니다.
+- **멀티체인 대시보드** — Market Lending 카드는 확장이 지원하는 10개 체인을 한 번의 multi-chain API query 로 조회합니다(포지션 100개 초과 시 pagination). 체인 목록의 source of truth 는 [src/lib/chains.ts](src/lib/chains.ts) 입니다.
 - **리스트 페이지 즐겨찾기** — `/variable` 와 `/vaults` 의 마켓/vault 에 별 표시를 하고, 원클릭 칩으로 내 선택만 남도록 필터. `chrome.storage.local` 만 사용(서버·추적 없음), `chrome.storage.onChanged` 로 탭 간 및 popup 과 동기화.
 - **툴바 popup 두 탭** — *Prime*(Mainnet / Base / Arbitrum / OP 의 엄선된 19 개 블루칩 마켓) + *Favorites*(즐겨찾기한 마켓과 vault, V1 / V2 MetaMorpho 모두 지원, 행 안에 `V1`/`V2` 작은 칩). Stale-while-revalidate 캐시: 5 분 메모리 + `chrome.storage.local` 영속화로, popup 을 다시 열어도 첫 프레임에 마지막 데이터가 보이고 백그라운드에서 새로 가져옵니다. APY ↓ 또는 TVL ↓ 정렬 가능.
-- **페이지 지갑 재사용** — 두 번째 connect 흐름 없음. MetaMask, Rabby, Frame, Coinbase Wallet, EIP-6963 호환 주입 지갑 모두 지원.
+- **페이지 injected wallet 재사용** — 별도 WalletConnect session 을 만들지 않습니다. 사이트가 아직 연결되지 않았다면 account access 승인이 필요할 수 있습니다. EIP-6963 및 기존 `window.ethereum` provider(MetaMask, Rabby, Frame, Coinbase Wallet 등)와 호환됩니다.
 - **비표준 ERC-20 지원** — USDT(및 `approve` 가 데이터를 반환하지 않는 기타 토큰)가 그대로 동작합니다. approve ABI 를 no outputs 로 선언하여 viem 의 simulation 이 `0x` 에서 실패하지 않습니다.
 - **사람이 읽을 수 있는 에러** — 서명 거부는 조용히 idle 로 복귀. 잔액 부족, 잘못된 체인, nonce 막힘, revert 사유는 2KB viem 덤프가 아닌 짧은 문장으로 표시됩니다.
 - **분석·텔레메트리·백엔드 없음** — public RPC 로 Morpho Blue 컨트랙트 직접 호출, APY / USD 수치만 Morpho 공식 API 로 가져옵니다.
 
 ## 동작 방식
 
-- **컨트랙트** — 모든 읽기/쓰기는 Morpho Blue 싱글톤 `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb` (지원 체인 전체에서 CREATE2 로 동일 주소) 를 통해 이뤄집니다. `idToMarketParams(id)` 로 URL 의 market id 를 온체인 파라미터로 해석하고, `supply(params, assets, 0, onBehalf, "0x")` 로 예치, `position(id, user)` + `market(id)` 로 잔액 계산.
+- **컨트랙트** — market read 와 supply/withdraw 는 각 지원 체인의 Morpho Blue singleton `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb` 을 사용합니다. `idToMarketParams(id)` 로 market id 를 해석하고, `supply(...)` 로 예치하며, `position(...)` + `market(...)` 로 잔액을 계산합니다. Approve 와 wrap/unwrap 은 loan token 또는 native-wrapper contract 를 직접 호출합니다.
 - **지갑 호출 중계** — wallet request 는 isolated content script 에서 extension service worker 로 전달됩니다. worker 가 발신자와 RPC method 를 검증한 뒤 `MAIN` world 에서 제한된 EIP-6963 / `window.ethereum` request 를 실행합니다. 페이지 script 는 `window.postMessage` 로 wallet path 를 호출할 수 없으며 확장은 키를 보유하지 않습니다.
 - **데이터** — `https://api.morpho.org/graphql` 에 대한 경량 GraphQL 로 APY 와 USD 를 조회. Shares-to-assets 계산은 직접 온체인 read 를 위해 `sharesMath.ts` 에도 로컬 포팅되어 있습니다.
 - **UI** — 독립 Dashboard widget 은 React 19 + Shadow DOM 을 사용하고, market Lend form 은 Morpho 기본 Borrow design token 과 utility class 를 상속하도록 light DOM 에 마운트됩니다. SPA 전환은 `history.pushState` / `replaceState` 패치와 animation 기반 변동을 무시하는 throttle 된 `MutationObserver` 로 포착합니다.
@@ -81,9 +81,11 @@
 
 URL slug 은 `app.morpho.org/sitemap.xml` 에서 가져오고, chain ID 는 공식 [Morpho API 지원 네트워크 목록](https://docs.morpho.org/developers/api/get-started/#supported-networks)과 대조합니다. Wrapped-native contract address 는 [`src/lib/chains.ts`](src/lib/chains.ts)에서 관리하며 각 chain 의 native wrapper deployment 로 검증합니다.
 
+확장은 현재 Morpho API 목록 중 10개 네트워크를 지원합니다. Robinhood Chain, Stable, Tempo 는 API 에 등재되어 있지만 확장에서는 아직 지원하지 않습니다.
+
 ## 설치
 
-### GitHub Releases 에서 설치 (Chrome Web Store 심사 대기 중 권장)
+### GitHub Releases 에서 설치 (수동 설치)
 
 `v*` 태그를 push 하면 GitHub Actions 가 빌드하여 ZIP 을 [Releases 페이지](../../releases) 에 첨부합니다. 설치 방법:
 
@@ -93,9 +95,11 @@ URL slug 은 `app.morpho.org/sitemap.xml` 에서 가져오고, chain ID 는 공�
 4. 우상단 **개발자 모드** 켜기
 5. **압축해제된 확장 프로그램을 로드합니다** → 해제한 폴더 선택
 
-Chrome 이 "개발자 모드 확장 프로그램" 경고를 표시합니다 — 로컬 설치 확장에서 항상 나타나는 정상 동작입니다. Chrome Web Store 심사가 통과되면 원클릭 설치가 가능하지만 며칠이 걸립니다; 기능적으로는 이 경로와 동일합니다.
+Chrome 이 "개발자 모드 확장 프로그램" 경고를 표시합니다 — 로컬 설치 확장에서 항상 나타나는 정상 동작입니다. Release artifact 는 store build 와 기능이 같지만 업데이트는 수동입니다.
 
 ### 소스에서 (개발)
+
+Node.js 20 이상과 pnpm 이 필요합니다(lockfile 은 pnpm format 9).
 
 ```bash
 pnpm install
@@ -147,7 +151,8 @@ src/
 │   ├── url.ts                # 라우트 매처 (market / dashboard / list / other)
 │   ├── favorites.ts          # chrome.storage.local 기반 즐겨찾기 + 탭 간 동기화
 │   ├── graphql.ts            # Morpho API 클라이언트(마켓, V1/V2 vault, 배치 + SWR 캐시)
-│   └── pageProvider.ts       # service-worker RPC client + viem WalletClient adapter
+│   ├── pageProvider.ts       # service-worker RPC client + viem WalletClient adapter
+│   └── walletRpcPolicy.ts    # wallet RPC sender, method, parameter 검증
 ├── ui/
 │   ├── MarketLendForm.tsx    # 마켓 페이지 Supply / Withdraw 폼 (wrap 토글 포함)
 │   ├── DashboardSupplyCard.tsx
@@ -169,8 +174,10 @@ scripts/
 ├── make-logo.py              # morpho-base.svg 에서 확장 아이콘 재생성
 └── morpho-base.svg           # 공식 Morpho 나비 (소스)
 tests/
-├── probe/                    # app.morpho.org DOM 스크레이프
+├── unit/                     # route, math, chain, RPC policy, GraphQL contract test
+├── probe/                    # app.morpho.org 대상 live DOM compatibility probe
 └── e2e/
+    ├── extensionStorage.ts   # extension context chrome.storage test helper
     ├── extension.spec.ts     # Lend 탭, 대시보드 마운트, 다크 모드, wallet isolation
     ├── favorites.spec.ts     # 별 + 필터 + extension storage 영속화
     ├── popup.spec.ts         # 툴바 popup — 탭, 정렬, V1/V2 vault, 캐시, 새로고침
@@ -179,16 +186,16 @@ tests/
 
 ## 보안
 
-- 컨트랙트 상태는 public RPC 로 읽습니다 (viem 가 체인별 4 개 provider 폴백). 쓰기는 사용자 지갑을 거치며, 확장은 개인키를 보유하거나 요청하지 않습니다.
+- 컨트랙트 상태는 체인별로 설정된 1–4개 public RPC 에서 읽고, endpoint 가 여러 개면 viem fallback 을 사용합니다. 쓰기는 사용자 지갑을 거치며, 확장은 개인키를 보유하거나 요청하지 않습니다.
 - Morpho, approve, unwrap 쓰기는 wallet prompt 전에 simulate 합니다. native wrap 은 직접 제출하며 각 receipt 성공을 확인한 뒤 다음 단계로 진행합니다.
 - 전액 출금은 이자 누적 시 정밀도 revert 를 피하기 위해 shares 기준, 부분 출금은 0.01% 허용 오차로 assets 기준을 사용합니다.
 - Host permissions 는 `https://app.morpho.org/*` 로 한정됩니다. `storage` 는 즐겨찾기와 cache 를 local 에만 저장하고, `scripting` 은 sender 검증 및 allow-list 를 통과한 wallet RPC 만 실행합니다. 설정된 RPC, `api.morpho.org`, Morpho token-logo CDN 외에는 데이터를 보내지 않습니다.
 
 ## 알려진 제한
 
-- **1 트랜잭션 wrap + supply** 는 아직 미구현. Morpho Bundler / GeneralAdapter 로 wrap + approve + supply 를 하나의 multicall 로 묶을 수 있지만, 현재는 2–3 개 서명으로 분리되어 있습니다.
+- **1 트랜잭션 wrap + supply** 는 아직 미구현. Morpho Bundler / GeneralAdapter 로 하나의 multicall 로 묶을 수 있지만, 현재는 wrap 과 allowance 상태에 따라 1–4개 wallet transaction 입니다.
 - **WalletConnect 전용 세션** (페이지에 주입된 EIP-1193 provider 가 없는 경우) 은 브리지가 인식하지 못합니다.
-- **번들 사이즈** 는 gzip 이전 ~530KB 로 viem 이 대부분을 차지합니다. 이후 릴리스에서 viem 의 체인/컨트랙트 코드 경로를 동적 import 로 전환할 예정입니다.
+- **번들 사이즈** v0.4.0 현재 build 는 약 555 KiB 의 uncompressed JavaScript(568,401 bytes)이며, 주로 viem 을 포함한 content/popup chunk 가 차지합니다. 정확한 크기는 build 마다 달라집니다.
 
 ## 배포
 
