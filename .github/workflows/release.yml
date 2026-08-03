@@ -67,6 +67,29 @@ jobs:
           fi
           echo "VERSION=$PKG_VERSION" >> "$GITHUB_ENV"
 
+      - name: Prepare release notes
+        run: |
+          cat > release-notes.md <<EOF
+          ## Install
+
+          1. Download \`morpho-enhancements-${VERSION}-unpacked.zip\` below
+          2. Unzip it into a stable directory
+          3. Open \`chrome://extensions\` in Chrome or another Chromium browser
+          4. Enable **Developer mode**
+          5. Click **Load unpacked** and select the unzipped directory
+
+          The \`-unpacked.zip\` artifact is for manual installation. The other ZIP is
+          the Chrome Web Store upload artifact; both contain the same extension build.
+
+          ## What's changed
+
+          EOF
+          awk -v version="$VERSION" '
+            $0 ~ "^## \\[" version "\\]" { capture = 1; next }
+            capture && $0 ~ "^## \\[" { exit }
+            capture { print }
+          ' CHANGELOG.md >> release-notes.md
+
       - name: Unit tests
         run: pnpm test:unit
 
@@ -92,21 +115,8 @@ jobs:
         with:
           tag_name: v${{ env.VERSION }}
           name: v${{ env.VERSION }}
-          generate_release_notes: true
-          body: |
-            ## Install
-
-            Chrome Web Store builds take days to review. To install directly from this release:
-
-            1. Download `morpho-enhancements-${{ env.VERSION }}-unpacked.zip` below
-            2. Unzip it somewhere (e.g. `~/extensions/morpho-enhancements-${{ env.VERSION }}/`)
-            3. Open `chrome://extensions` in Chrome or any Chromium-based browser
-            4. Turn on **Developer mode** (top-right)
-            5. Click **Load unpacked** and select the unzipped folder
-
-            The other ZIP (`morpho-enhancements-${{ env.VERSION }}.zip`) is the Chrome Web Store upload artifact — same contents, different packaging; most users want the `-unpacked` one.
-
-            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/v${{ env.VERSION }}/CHANGELOG.md#${{ env.VERSION }}) for what changed.
+          generate_release_notes: false
+          body_path: release-notes.md
           files: |
             dist-zip/morpho-enhancements-${{ env.VERSION }}.zip
             dist-zip/morpho-enhancements-${{ env.VERSION }}-unpacked.zip
