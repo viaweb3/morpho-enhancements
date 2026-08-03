@@ -67,8 +67,17 @@ jobs:
           fi
           echo "VERSION=$PKG_VERSION" >> "$GITHUB_ENV"
 
+      - name: Unit tests
+        run: pnpm test:unit
+
+      - name: Install Chromium for extension E2E
+        run: pnpm exec playwright install --with-deps chromium
+
       - name: Build
         run: pnpm build
+
+      - name: Extension E2E
+        run: xvfb-run --auto-servernum pnpm test:e2e
 
       - name: Package zip
         run: node scripts/package-zip.mjs

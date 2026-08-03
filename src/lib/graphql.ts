@@ -6,11 +6,19 @@ const ENDPOINT = 'https://blue-api.morpho.org/graphql';
 type GraphQLError = { message: string };
 
 async function request<T>(query: string, variables: Record<string, unknown>): Promise<T> {
-  const res = await fetch(ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, variables }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  let res: Response;
+  try {
+    res = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, variables }),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
   if (!res.ok) {
     throw new Error(`GraphQL HTTP ${res.status}`);
   }
@@ -27,7 +35,7 @@ async function request<T>(query: string, variables: Record<string, unknown>): Pr
 const MARKET_BY_ID = `
   query MarketById($marketId: String!, $chainId: Int!) {
     marketById(marketId: $marketId, chainId: $chainId) {
-      uniqueKey
+      uniqueKey: marketId
       lltv
       loanAsset { address symbol decimals logoURI }
       collateralAsset { address symbol decimals logoURI }
@@ -44,22 +52,25 @@ const MARKET_BY_ID = `
 `;
 
 const USER_MARKET_POSITIONS = `
-  query UserMarketPositions($user: String!, $chainIds: [Int!]!) {
+  query UserMarketPositions($user: String!, $chainIds: [Int!]!, $skip: Int!) {
     marketPositions(
       first: 100
+      skip: $skip
       where: { userAddress_in: [$user], chainId_in: $chainIds }
     ) {
       items {
-        supplyShares
-        supplyAssets
-        supplyAssetsUsd
-        borrowShares
-        borrowAssets
-        borrowAssetsUsd
-        collateral
-        collateralUsd
+        state {
+          supplyShares
+          supplyAssets
+          supplyAssetsUsd
+          borrowShares
+          borrowAssets
+          borrowAssetsUsd
+          collateral
+          collateralUsd
+        }
         market {
-          uniqueKey
+          uniqueKey: marketId
           lltv
           loanAsset { address symbol decimals logoURI }
           collateralAsset { address symbol decimals logoURI }
@@ -112,6 +123,29 @@ export type ApiMarketPosition = {
   };
 };
 
+type RawApiMarketPosition = Omit<
+  ApiMarketPosition,
+  | 'supplyShares'
+  | 'supplyAssets'
+  | 'supplyAssetsUsd'
+  | 'borrowShares'
+  | 'borrowAssets'
+  | 'borrowAssetsUsd'
+  | 'collateral'
+  | 'collateralUsd'
+> & {
+  state: {
+    supplyShares: string;
+    supplyAssets: string | null;
+    supplyAssetsUsd: number | null;
+    borrowShares: string;
+    borrowAssets: string | null;
+    borrowAssetsUsd: number | null;
+    collateral: string;
+    collateralUsd: number | null;
+  } | null;
+};
+
 export async function fetchMarketById(
   marketId: string,
   chainId: number,
@@ -129,13 +163,30 @@ export async function fetchUserMarketPositions(
 ): Promise<ApiMarketPosition[]> {
   // blue-api requires lowercase addresses — EIP-55 checksum fails validation.
   const ids = Array.isArray(chainIds) ? chainIds : [chainIds];
-  const data = await request<{
-    marketPositions: { items: ApiMarketPosition[] } | null;
-  }>(USER_MARKET_POSITIONS, {
-    user: user.toLowerCase(),
-    chainIds: ids,
-  });
-  return data.marketPositions?.items ?? [];
+  const positions: ApiMarketPosition[] = [];
+  for (let skip = 0; skip < 10_000; skip += 100) {
+    const data = await request<{
+      marketPositions: { items: RawApiMarketPosition[] } | null;
+    }>(USER_MARKET_POSITIONS, {
+      user: user.toLowerCase(),
+      chainIds: ids,
+      skip,
+    });
+    const items = data.marketPositions?.items ?? [];
+    positions.push(...items.map(({ state, ...position }) => ({
+      ...position,
+      supplyShares: state?.supplyShares ?? '0',
+      supplyAssets: state?.supplyAssets ?? '0',
+      supplyAssetsUsd: state?.supplyAssetsUsd ?? 0,
+      borrowShares: state?.borrowShares ?? '0',
+      borrowAssets: state?.borrowAssets ?? '0',
+      borrowAssetsUsd: state?.borrowAssetsUsd ?? 0,
+      collateral: state?.collateral ?? '0',
+      collateralUsd: state?.collateralUsd ?? 0,
+    })));
+    if (items.length < 100) return positions;
+  }
+  throw new Error('Position query exceeded the 10,000-item safety limit');
 }
 
 // --- Batch fetch (used by the toolbar popup) ---
@@ -268,20 +319,75 @@ export function fetchMarketByIdCached(ref: MarketRef): Promise<ApiMarket | null>
 export async function fetchMarketsBatch(
   refs: readonly MarketRef[],
 ): Promise<MarketBatchResult[]> {
-  return Promise.all(
-    refs.map(async (ref) => {
+  const results = new Map<string, { market: ApiMarket | null; error?: string }>();
+  const stale: MarketRef[] = [];
+  const now = Date.now();
+
+  for (const ref of refs) {
+    const key = marketCacheKey(ref);
+    const hit = marketCache.get(key);
+    if (hit && now - hit.at < FRESH_TTL_MS) results.set(key, { market: hit.data });
+    else stale.push(ref);
+  }
+
+  const groups = new Map<number, MarketRef[]>();
+  for (const ref of stale) {
+    const group = groups.get(ref.chainId) ?? [];
+    if (!group.some((item) => marketCacheKey(item) === marketCacheKey(ref))) group.push(ref);
+    groups.set(ref.chainId, group);
+  }
+
+  await Promise.all(
+    [...groups.entries()].map(async ([chainId, group]) => {
       try {
-        const market = await fetchMarketByIdCached(ref);
-        return { ref, market };
-      } catch (e: unknown) {
-        return {
-          ref,
-          market: null,
-          error: e instanceof Error ? e.message : String(e),
-        };
+        const fetched = await fetchMarketsForChain(chainId, group);
+        for (const ref of group) {
+          const key = marketCacheKey(ref);
+          const market = fetched.get(key) ?? null;
+          marketCache.set(key, { at: Date.now(), data: market });
+          results.set(key, { market });
+        }
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        for (const ref of group) {
+          const key = marketCacheKey(ref);
+          results.set(key, { market: marketCache.get(key)?.data ?? null, error: message });
+        }
       }
     }),
   );
+  if (stale.length > 0) schedulePersist();
+
+  return refs.map((ref) => ({ ref, ...(results.get(marketCacheKey(ref)) ?? { market: null }) }));
+}
+
+async function fetchMarketsForChain(
+  chainId: number,
+  refs: readonly MarketRef[],
+): Promise<Map<string, ApiMarket | null>> {
+  if (refs.length === 0) return new Map();
+  const declarations = ['$chainId: Int!'];
+  const fields: string[] = [];
+  const variables: Record<string, unknown> = { chainId };
+  refs.forEach((ref, index) => {
+    const variable = `marketId${index}`;
+    declarations.push(`$${variable}: String!`);
+    variables[variable] = ref.marketId;
+    fields.push(`
+      market${index}: marketById(marketId: $${variable}, chainId: $chainId) {
+        uniqueKey: marketId
+        lltv
+        loanAsset { address symbol decimals logoURI }
+        collateralAsset { address symbol decimals logoURI }
+        state { supplyApy borrowApy supplyAssets supplyAssetsUsd borrowAssets utilization }
+      }
+    `);
+  });
+  const query = `query MarketsBatch(${declarations.join(', ')}) { ${fields.join('\n')} }`;
+  const data = await request<Record<string, ApiMarket | null>>(query, variables);
+  const result = new Map<string, ApiMarket | null>();
+  refs.forEach((ref, index) => result.set(marketCacheKey(ref), data[`market${index}`] ?? null));
+  return result;
 }
 
 // --- Vault query (used by the popup's Favorites tab) ---

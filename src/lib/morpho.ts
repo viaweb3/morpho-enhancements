@@ -1,7 +1,9 @@
 import {
   createPublicClient,
+  encodeAbiParameters,
   fallback,
   http,
+  keccak256,
   getContract,
   type Address,
   type Hex,
@@ -35,6 +37,21 @@ export type Erc20Meta = {
   symbol: string;
   decimals: number;
 };
+
+export function marketParamsToId(params: MarketParams): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: 'address', name: 'loanToken' },
+        { type: 'address', name: 'collateralToken' },
+        { type: 'address', name: 'oracle' },
+        { type: 'address', name: 'irm' },
+        { type: 'uint256', name: 'lltv' },
+      ],
+      [params.loanToken, params.collateralToken, params.oracle, params.irm, params.lltv],
+    ),
+  );
+}
 
 export class MorphoClient {
   readonly chainSlug: SupportedChainSlug;
@@ -71,13 +88,18 @@ export class MorphoClient {
       functionName: 'idToMarketParams',
       args: [id],
     });
-    return {
+    const params: MarketParams = {
       loanToken: result.loanToken,
       collateralToken: result.collateralToken,
       oracle: result.oracle,
       irm: result.irm,
       lltv: result.lltv,
     };
+    const resolvedId = marketParamsToId(params);
+    if (resolvedId.toLowerCase() !== id.toLowerCase()) {
+      throw new Error('RPC returned market parameters that do not match the requested market ID');
+    }
+    return params;
   }
 
   async marketState(id: Hex): Promise<MarketState> {
@@ -226,6 +248,19 @@ export class MorphoClient {
 
   async nativeBalance(owner: Address): Promise<bigint> {
     return this.publicClient.getBalance({ address: owner });
+  }
+
+  async nativeGasReserve(): Promise<bigint> {
+    const gasPrice = await this.publicClient.getGasPrice();
+    // Reserve enough native currency for the wrap + approve + supply sequence.
+    return gasPrice * 350_000n;
+  }
+
+  async waitForSuccessfulTransaction(hash: Hex): Promise<void> {
+    const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
+    if (receipt.status !== 'success') {
+      throw new Error(`Transaction reverted: ${hash}`);
+    }
   }
 
   async wrapEth(

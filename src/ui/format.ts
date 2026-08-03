@@ -35,6 +35,8 @@ export function tryParseUnits(raw: string, decimals: number): bigint | null {
   const trimmed = raw.trim();
   if (!/^\d*\.?\d*$/.test(trimmed)) return null;
   if (trimmed === '' || trimmed === '.') return null;
+  const fraction = trimmed.split('.')[1] ?? '';
+  if (fraction.length > decimals) return null;
   try {
     return parseUnits(trimmed as `${number}`, decimals);
   } catch {

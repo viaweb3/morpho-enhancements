@@ -8,9 +8,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const EXT_PATH = join(__dirname, '..', '..', 'dist');
 
 const MARKET_URL =
-  'https://app.morpho.org/ethereum/market/0xa921ef34e2fc7a27ccc50ae7e4b154e16c9799d3387076c421423ef52ac4df99/wbtc-usdt';
+  'https://app.morpho.org/ethereum/variable/0xa921ef34e2fc7a27ccc50ae7e4b154e16c9799d3387076c421423ef52ac4df99/wbtc-usdt';
 const DASHBOARD_URL =
-  'https://app.morpho.org/dashboard/0x11111111652DeB43CF2ee68065E8296249428B61';
+  'https://app.morpho.org/portfolio/0x11111111652DeB43CF2ee68065E8296249428B61';
 
 let ctx: BrowserContext;
 let userDataDir: string;
@@ -18,6 +18,7 @@ let userDataDir: string;
 test.beforeAll(async () => {
   userDataDir = mkdtempSync(join(tmpdir(), 'morpho-ext-'));
   ctx = await chromium.launchPersistentContext(userDataDir, {
+    executablePath: process.env.PLAYWRIGHT_CHROME_EXECUTABLE,
     headless: false,
     viewport: { width: 1440, height: 900 },
     args: [
@@ -78,6 +79,20 @@ test('lend tab appears next to borrow tab, switching reveals supply form', async
     page.locator('[data-testid="market-action-panel"] [data-testid="asset-input"]').first(),
   ).toBeVisible();
 
+  const nativeInputStyle = await page.evaluate(() => {
+    const input = document.querySelector<HTMLElement>(
+      '[data-testid="market-action-panel"] [data-testid="asset-input"]',
+    );
+    let card: HTMLElement | null = input;
+    while (card && getComputedStyle(card).borderRadius !== '20px') card = card.parentElement;
+    const box = card?.getBoundingClientRect();
+    return {
+      cardHeight: box?.height ?? 0,
+      cardRadius: card ? getComputedStyle(card).borderRadius : '',
+      inputFontSize: input ? getComputedStyle(input).fontSize : '',
+    };
+  });
+
   // Screenshot with Borrow active (default)
   await page
     .locator('[data-testid="market-action-panel"]')
@@ -98,8 +113,31 @@ test('lend tab appears next to borrow tab, switching reveals supply form', async
   const lendHost = page.locator('[data-testid="market-action-panel"] .mx-lend-host');
   await expect(lendHost).toBeVisible();
   await expect(lendHost).toContainText(/Supply\s+USDT/i, { timeout: 15_000 });
+  const tokenLogo = lendHost.locator('img[alt="USDT"]');
+  await expect(tokenLogo).toBeVisible();
+  const logoBox = await tokenLogo.boundingBox();
+  expect(logoBox?.width).toBeLessThanOrEqual(20);
+  expect(logoBox?.height).toBeLessThanOrEqual(20);
+
+  // Guard the visual contract: the extension input uses the same geometry and
+  // typography as the native Borrow asset input it replaces.
+  const lendInputStyle = await page.evaluate(() => {
+    const card = document.querySelector<HTMLElement>('[data-morpho-ext-input-card]');
+    const input = card?.querySelector<HTMLElement>('input');
+    const box = card?.getBoundingClientRect();
+    return {
+      cardHeight: box?.height ?? 0,
+      cardRadius: card ? getComputedStyle(card).borderRadius : '',
+      inputFontSize: input ? getComputedStyle(input).fontSize : '',
+    };
+  });
+  expect(nativeInputStyle.cardHeight).toBeGreaterThan(0);
+  expect(Math.abs(lendInputStyle.cardHeight - nativeInputStyle.cardHeight)).toBeLessThanOrEqual(2);
+  expect(lendInputStyle.cardRadius).toBe(nativeInputStyle.cardRadius);
+  expect(lendInputStyle.inputFontSize).toBe(nativeInputStyle.inputFontSize);
   // Wait for at least one row of market details to populate (Supply APY not '—')
   await expect(lendHost).toContainText(/Supply APY/i);
+  await expect(lendHost.getByRole('button', { name: 'Connect wallet' })).toBeEnabled();
 
   // Give the market data a few seconds to populate from the GraphQL API
   await page.waitForTimeout(3000);
@@ -231,17 +269,20 @@ test('dark mode — market lend panel text is legible', async () => {
     .screenshot({ path: join(__dirname, 'market-lend-dark.png') });
 });
 
-test('provider bridge announces providers from page', async () => {
+test('wallet RPC is extension-mediated and page postMessage forgery is ignored', async () => {
   const page = await ctx.newPage();
 
   // Inject a mock EIP-1193 provider. The mock must respond to
-  // `eip6963:requestProvider` events the bridge fires at startup. Since
+  // `eip6963:requestProvider` events the service worker fires on demand. Since
   // addInitScript runs before any page script, this listener is set up
   // before the bridge's world:MAIN content script runs.
   await page.addInitScript(() => {
+    const methods: string[] = [];
+    (window as unknown as { __mockWalletMethods?: string[] }).__mockWalletMethods = methods;
     const mock = {
       isMock: true,
       request: async ({ method }: { method: string }) => {
+        methods.push(method);
         if (method === 'eth_accounts') return ['0xfA16e2A1A52A0202E4D4906B0917d01c7a3CFDD6'];
         if (method === 'eth_requestAccounts') return ['0xfA16e2A1A52A0202E4D4906B0917d01c7a3CFDD6'];
         if (method === 'eth_chainId') return '0x1';
@@ -260,7 +301,7 @@ test('provider bridge announces providers from page', async () => {
     });
     // Legacy fallback
     (window as unknown as { ethereum?: unknown }).ethereum = mock;
-    // Also announce on load in case the bridge registers its listener after us
+    // Also announce on load for compatibility with provider discovery listeners.
     setTimeout(
       () =>
         window.dispatchEvent(new CustomEvent('eip6963:announceProvider', { detail })),
@@ -271,30 +312,33 @@ test('provider bridge announces providers from page', async () => {
   await page.goto(MARKET_URL);
   await page.waitForSelector('[data-testid="market-action-panel"]', { timeout: 45_000 });
 
-  // Ask the bridge to (re-)announce. It posts back on window.
-  const providers = await page.evaluate(() => {
-    return new Promise<unknown>((resolve) => {
-      const results: unknown[] = [];
-      const onMsg = (ev: MessageEvent) => {
-        if (ev.data?.source === 'morpho-ext/page' && ev.data.type === 'providers') {
-          results.push(ev.data.providers);
-        }
-      };
-      window.addEventListener('message', onMsg);
-      window.postMessage(
-        { source: 'morpho-ext/cs', id: 9999, method: 'morpho-ext/listProviders' },
-        '*',
-      );
-      // Give the bridge a moment to respond (it's synchronous from the
-      // handler's perspective but messages travel through the message loop).
-      setTimeout(() => {
-        window.removeEventListener('message', onMsg);
-        resolve(results[results.length - 1] ?? null);
-      }, 2000);
-    });
-  });
+  const lendTab = page.locator('[data-testid="market-action-panel"] .mx-tab', { hasText: 'Lend' });
+  await expect(lendTab).toBeVisible({ timeout: 15_000 });
+  // This test targets RPC isolation, while the first E2E already verifies a
+  // real user click. Morpho may randomly show its own onboarding dialog over
+  // the panel, so bypass that unrelated overlay here to keep the security
+  // assertion deterministic.
+  await lendTab.click({ force: true });
+  await expect.poll(() => page.evaluate(() =>
+    (window as unknown as { __mockWalletMethods?: string[] }).__mockWalletMethods?.length ?? 0,
+  )).toBeGreaterThan(0);
 
-  expect(Array.isArray(providers)).toBeTruthy();
-  const json = JSON.stringify(providers);
-  expect(json).toMatch(/mock-uuid|legacy:window\.ethereum/);
+  const before = await page.evaluate(() =>
+    [...((window as unknown as { __mockWalletMethods?: string[] }).__mockWalletMethods ?? [])],
+  );
+  const sendCountBefore = before.filter((method) => method === 'eth_sendTransaction').length;
+  await page.evaluate(() => {
+    window.postMessage(
+      { source: 'morpho-ext/cs', id: 9999, method: 'eth_sendTransaction', params: [{ to: '0x0' }] },
+      '*',
+    );
+  });
+  await page.waitForTimeout(300);
+  const after = await page.evaluate(() =>
+    [...((window as unknown as { __mockWalletMethods?: string[] }).__mockWalletMethods ?? [])],
+  );
+  // Account/chain polling may legitimately run during the wait. The forged
+  // page message must not produce a sensitive transaction RPC.
+  expect(after.length).toBeGreaterThanOrEqual(before.length);
+  expect(after.filter((method) => method === 'eth_sendTransaction')).toHaveLength(sendCountBefore);
 });

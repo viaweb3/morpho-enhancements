@@ -13,29 +13,24 @@ End-to-end checklist for getting this extension onto the Chrome Web Store. Read 
 Chrome wants a single ZIP containing the extension's root — i.e. `manifest.json` must sit at the archive root, not inside a `dist/` folder.
 
 ```bash
-pnpm build
+# Runs unit tests, production build, live probes, extension E2E, screenshot
+# generation, and creates the upload ZIP from the verified dist/ directory.
+pnpm test:release
 
-# Validate the manifest and file list
+# Validate the final manifest and archive
 cat dist/manifest.json | jq .
-ls dist
-
-# Zip just the contents of dist/, not dist itself
-cd dist
-zip -r ../morpho-enhancements-<version>.zip .
-cd ..
+unzip -t dist-zip/morpho-enhancements-<version>.zip
 ```
 
 Sanity-check things that trip up reviewers:
 
 - `manifest.json` has the correct `version` (matches `package.json`).
 - `icons` sizes 16 / 32 / 48 / 128 all exist and open cleanly.
-- `permissions` and `host_permissions` list only what's actually used. Currently: `permissions: ["storage"]` (favorites + popup data cache) and `host_permissions: ["https://app.morpho.org/*"]`.
-- No source maps for production — remove `*.map` from the ZIP if your build produces them by default.
+- `permissions` and `host_permissions` list only what's actually used. Currently: `permissions: ["storage", "scripting"]` (local data plus sender-validated wallet RPC execution) and `host_permissions: ["https://app.morpho.org/*"]`.
+- No source maps or Vite's internal manifest in production; `scripts/package-zip.mjs` excludes both.
 
-```bash
-# Delete source maps from the ZIP if present
-zip -d morpho-enhancements-<version>.zip '*.map'
-```
+The upload artifact is `dist-zip/morpho-enhancements-<version>.zip`. Do not zip
+the `dist/` directory itself or reuse an archive from an earlier build.
 
 ## 2. Developer Dashboard — new item
 
@@ -61,7 +56,7 @@ Long form (up to ~16,000 chars). A usable draft:
 >
 > • **Dashboard visibility** — your direct-market lending positions show up on the dashboard, across every chain Morpho supports.
 >
-> • **Favorites on /markets and /vaults** — star any row; a Favorites-only chip filters the list down to just your picks. Kept in your browser only, works across tabs.
+> • **Favorites on /variable and /vaults** — star any row; a Favorites-only chip filters the list down to just your picks. Kept in your browser only, works across tabs.
 >
 > The extension reuses the wallet you've already connected to Morpho — no separate connect flow. When the loan asset is the chain's wrapped-native token (WETH, WPOL, WMON, WHYPE), a small toggle lets you pay with the native currency and auto-wraps in the background.
 >
@@ -107,6 +102,7 @@ The dashboard will ask a handful of narrowed-down questions. For this extension 
 - **Permission justifications**:
   - `host_permissions: https://app.morpho.org/*` — "Required to inject UI and read DOM on Morpho's own pages; the only site this extension touches."
   - `permissions: storage` — "Persists the user's market/vault favorites and a small cache of public on-chain figures (APY, TVL) so the toolbar popup paints with last-known data instantly. Stored locally in `chrome.storage.local`; never transmitted."
+  - `permissions: scripting` — "Executes a single allow-listed wallet RPC request in the page's MAIN world after the extension service worker validates that it came from this extension's top-frame content script on app.morpho.org."
 - **Remote code use**: No remote code is executed. The extension ships all JS in the ZIP; it calls HTTPS endpoints for JSON data only (RPC + Morpho blue-api).
 - **Data handling**:
   - Does not collect or transmit personal info, authentication info, location, health, financial-personal info, or user activity / web history beyond what's needed to render the injected UI on the one permitted host.
@@ -140,8 +136,10 @@ If rejected, the email explains why. Re-upload the ZIP under the same item; you 
 
 For transparency with reviewers (and future-you):
 
-- No background service worker. Everything is content-script + popup.
+- The MV3 background service worker exists only to validate and broker
+  allow-listed wallet RPC requests; it performs no polling, analytics, or
+  persistent background processing.
 - No cookies. `chrome.storage.local` is used for favorites and the popup data cache only — both stay on the device.
-- No alarms, no tabs, no webRequest, no scripting.
+- No alarms, tabs, or webRequest permission. `scripting` is used only for the validated wallet request path described above.
 - No external fonts, no hosted CSS.
 - No fingerprinting or device-identifier reads.

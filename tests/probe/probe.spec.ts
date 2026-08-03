@@ -9,16 +9,23 @@ const OUT = join(__dirname, 'out');
 mkdirSync(OUT, { recursive: true });
 
 const MARKET_URL =
-  'https://app.morpho.org/ethereum/market/0xa921ef34e2fc7a27ccc50ae7e4b154e16c9799d3387076c421423ef52ac4df99/wbtc-usdt';
+  'https://app.morpho.org/ethereum/variable/0xa921ef34e2fc7a27ccc50ae7e4b154e16c9799d3387076c421423ef52ac4df99/wbtc-usdt';
 const DASHBOARD_URL =
-  'https://app.morpho.org/dashboard/0x11111111652DeB43CF2ee68065E8296249428B61';
+  'https://app.morpho.org/portfolio/0x11111111652DeB43CF2ee68065E8296249428B61';
 
 async function dump(page: import('@playwright/test').Page, name: string) {
   await page.waitForLoadState('networkidle', { timeout: 60_000 }).catch(() => {});
   // Extra wait for React hydration + data load
   await page.waitForTimeout(6_000);
 
-  await page.screenshot({ path: join(OUT, `${name}.png`), fullPage: true });
+  // Live list/detail pages can be virtually rendered and effectively unbounded.
+  // A viewport capture is deterministic; the structured DOM report below covers
+  // the full document without making Chrome rasterize an enormous page.
+  await page.screenshot({
+    path: join(OUT, `${name}.png`),
+    fullPage: false,
+    animations: 'disabled',
+  });
 
   const report = await page.evaluate(() => {
     const byTestId = Array.from(document.querySelectorAll<HTMLElement>('[data-testid]')).map(
@@ -99,7 +106,11 @@ async function dumpList(
 ) {
   await page.waitForLoadState('networkidle', { timeout: 60_000 }).catch(() => {});
   await page.waitForTimeout(6_000);
-  await page.screenshot({ path: join(OUT, `${name}.png`), fullPage: true });
+  await page.screenshot({
+    path: join(OUT, `${name}.png`),
+    fullPage: false,
+    animations: 'disabled',
+  });
 
   const report = await page.evaluate((pattern: string) => {
     const re = new RegExp(pattern);
@@ -174,8 +185,8 @@ async function dumpList(
 }
 
 test('probe markets list', async ({ page }) => {
-  await page.goto('https://app.morpho.org/markets');
-  await dumpList(page, 'markets-list', /\/market\//);
+  await page.goto('https://app.morpho.org/variable');
+  await dumpList(page, 'markets-list', /\/variable\//);
 });
 
 test('probe vaults list', async ({ page }) => {

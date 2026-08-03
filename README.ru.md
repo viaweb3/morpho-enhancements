@@ -8,7 +8,7 @@
 
 2. **Видимость на дашборде** — штатный дашборд показывает депозиты в vault-ы и заёмные позиции, но не прямые поставки в рынки. Расширение добавляет карточку **Market Lending**, которая показывает все рынки, где пользователь является прямым кредитором, по всем поддерживаемым Morpho сетям, с USD-стоимостью, APY и ссылкой на страницу рынка.
 
-3. **Избранное на `/markets` и `/vaults`** — звёздочка у любой строки добавляет рынок/vault в закладки, а чип **Favorites only** в нижнем левом углу фильтрует список до пары тех, что вам важны. Хранится в браузере и синхронизируется между вкладками.
+3. **Избранное на `/variable` и `/vaults`** — звёздочка у любой строки добавляет рынок/vault в закладки, а чип **Favorites only** в нижнем левом углу фильтрует список до пары тех, что вам важны. Хранится в браузере и синхронизируется между вкладками.
 
 4. **Popup на панели инструментов** — клик по иконке расширения открывает быстрый просмотр: вкладка *Prime* перечисляет 19 отобранных вручную blue-chip рынков по Mainnet / Base / Arbitrum / OP с supply APY, TVL, утилизацией и LLTV; вкладка *Favorites* показывает все ваши избранные рынки и vault-ы (V1 и V2 MetaMorpho поддерживаются). Сортировка по APY или TVL, клик по строке открывает соответствующую страницу на app.morpho.org.
 
@@ -49,8 +49,8 @@
 
 - **Вкладки Borrow | Lend** на панели рынка. Клик по Lend заменяет штатную форму на UI supply / withdraw, совпадающий со стилем Morpho в светлой и тёмной темах.
 - **Автоматический wrap ETH / WETH** — если заёмный актив является wrapped-native токеном сети, появляется переключатель, позволяющий платить нативной валютой (POL на Polygon, MON на Monad, HYPE на HyperEVM и т. д.). Расширение автоматически делает wrap перед supply и unwrap после withdraw. Всего две подписи, без отдельного UX-прохода для wrap.
-- **Мультисетевой Dashboard** — карточка Market Lending одним запросом охватывает все сети, которые поддерживает Morpho. Актуальный список сетей поддерживается в [src/services/chain/morphoSupportedChains.ts](src/services/chain/morphoSupportedChains.ts).
-- **Избранное на страницах списков** — звезда у рынков и vault-ов в `/markets` и `/vaults`, фильтрация одним кликом. Хранится только в `chrome.storage.local` (без сервера и трекинга), синхронизируется между вкладками и popup через `chrome.storage.onChanged`.
+- **Мультисетевой Dashboard** — карточка Market Lending одним запросом охватывает все сети, которые поддерживает Morpho. Актуальный список сетей поддерживается в [src/lib/chains.ts](src/lib/chains.ts).
+- **Избранное на страницах списков** — звезда у рынков и vault-ов в `/variable` и `/vaults`, фильтрация одним кликом. Хранится только в `chrome.storage.local` (без сервера и трекинга), синхронизируется между вкладками и popup через `chrome.storage.onChanged`.
 - **Popup на панели с двумя вкладками** — *Prime* (19 отобранных вручную blue-chip рынков по Mainnet / Base / Arbitrum / OP) и *Favorites* (избранные рынки и vault-ы; V1 и V2 MetaMorpho с маленьким чипом `V1`/`V2` в строке). Stale-while-revalidate кеш: 5 минут в памяти + персистентность в `chrome.storage.local`, поэтому повторное открытие popup сразу рисует последние данные, пока в фоне идёт свежий запрос. Сортировка по APY ↓ или TVL ↓.
 - **Использует уже подключенный кошелёк** — без повторного connect-флоу. Поддерживает MetaMask, Rabby, Frame, Coinbase Wallet и любой EIP-6963-совместимый провайдер.
 - **Нестандартные ERC-20** — USDT (и другие токены, у которых `approve` не возвращает данных) работают из коробки; approve ABI объявлен без outputs, поэтому симуляция viem не падает на `0x`.
@@ -60,9 +60,9 @@
 ## Как это работает
 
 - **Контракты** — все чтения/записи идут через синглтон Morpho Blue по адресу `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb` (детерминированный CREATE2 на всех поддерживаемых сетях). `idToMarketParams(id)` разрешает id рынка из URL в параметры on-chain; `supply(params, assets, 0, onBehalf, "0x")` обрабатывает депозит; `position(id, user)` + `market(id)` питают расчёт баланса.
-- **Мост кошелька** — content script в `world: "MAIN"` реализует обнаружение EIP-6963 (+ fallback на `window.ethereum`) и проксирует запросы EIP-1193 через `window.postMessage` к изолированному content script. Поверх строится viem `WalletClient`; ключи не удерживаются.
+- **Посредник кошелька** — запросы идут из изолированного content script в service worker расширения. Worker проверяет отправителя и метод RPC, затем выполняет ограниченный запрос EIP-6963 / `window.ethereum` в `MAIN` world. Скрипты страницы не могут вызвать кошелёк через `window.postMessage`; ключи не удерживаются.
 - **Данные** — лёгкий GraphQL к `https://blue-api.morpho.org/graphql` для APY и USD. Математика shares↔assets также портирована локально в `sharesMath.ts` для прямых чтений on-chain.
-- **UI** — React 19, смонтированный внутри Shadow DOM, чтобы стили расширения не протекали на страницу Morpho и обратно. SPA-навигация ловится патчем `history.pushState` / `replaceState` и тротлированным `MutationObserver`-ом, игнорирующим DOM-шум от анимаций.
+- **UI** — отдельные Dashboard-виджеты используют React 19 + Shadow DOM; форма Lend на странице рынка намеренно монтируется в light DOM, чтобы наследовать нативные design tokens и utility classes формы Borrow. SPA-навигация отслеживается патчем `history.pushState` / `replaceState` и тротлированным `MutationObserver`, игнорирующим DOM-шум от анимаций.
 
 ## Поддерживаемые сети
 
@@ -108,11 +108,15 @@ pnpm build
 ## Тесты
 
 ```bash
+# Полный release gate: логика, сборка, live DOM probes, extension E2E,
+# скриншоты и ZIP для Chrome Web Store
+pnpm test:release
+
 # DOM-проба по живому сайту (собирает якоря и пример layout-JSON)
 pnpm probe
 
 # End-to-end — запускает Chromium со собранным расширением. Покрывает: вкладку Lend,
-# монтирование dashboard, читаемость в тёмной теме, провайдерный мост, избранное
+# монтирование dashboard, читаемость в тёмной теме, изоляция кошелька, избранное
 # (звёзды + фильтр) и popup на панели (вкладки, сортировка, V1/V2 vault, кеш)
 pnpm test:e2e
 ```
@@ -127,22 +131,23 @@ pnpm exec playwright test tests/e2e/screenshots.spec.ts
 
 ```
 src/
+├── background.ts             # Проверенный отправитель и allow-list wallet RPC
 ├── manifest.config.ts        # Декларация MV3 manifest
 ├── content/
 │   ├── main.ts               # ISOLATED world — наблюдение за SPA-маршрутами + диспетчер монтажа
 │   ├── mount.ts              # Shadow DOM host + React root + синхронизация темы
 │   ├── router.ts             # pushState/replaceState → событие locationchange
 │   ├── marketIntegration.ts  # Инъекция вкладок Borrow | Lend на панели рынка
-│   └── listsIntegration.ts   # Звёзды избранного + filter chip на /markets и /vaults
+│   └── listsIntegration.ts   # Звёзды избранного + filter chip на /variable и /vaults
 ├── lib/
 │   ├── morpho.ts             # viem public client + хелперы контракта Morpho
 │   ├── morphoAbi.ts          # ABI IMorpho + ERC20 + WETH9
 │   ├── sharesMath.ts         # Порт SharesMathLib (virtual shares/assets)
 │   ├── chains.ts             # Slug ↔ chain ID, wrapped-native, список RPC fallback
 │   ├── url.ts                # Матчер маршрутов (market / dashboard / list / other)
-│   ├── favorites.ts          # Хранилище избранного на chrome.storage.local + кросс-таб синк + E2E мост
+│   ├── favorites.ts          # Хранилище избранного на chrome.storage.local + кросс-таб синк
 │   ├── graphql.ts            # Клиент blue-api (рынки, V1/V2 vault, batch + SWR кеш)
-│   └── pageProvider.ts       # Клиент моста + адаптер viem WalletClient
+│   └── pageProvider.ts       # Клиент service-worker RPC + адаптер viem WalletClient
 ├── ui/
 │   ├── MarketLendForm.tsx    # Форма Supply / Withdraw на странице рынка (с wrap-тумблером)
 │   ├── DashboardSupplyCard.tsx
@@ -159,17 +164,15 @@ src/
 │   └── curatedMarkets.ts     # Prime watch-list (19 рынков, ручная поддержка)
 public/
 ├── icons/                    # Генерируется scripts/make-logo.py (16/32/48/128)
-├── logo.svg                  # Мастер-вектор (бабочка Morpho + enhancement-значок)
-└── injected/
-    └── provider-bridge.js    # Чистый JS MAIN-world мост (не бандлится с приложением)
+└── logo.svg                  # Мастер-вектор (бабочка Morpho + enhancement-значок)
 scripts/
 ├── make-logo.py              # Регенерация иконок из morpho-base.svg
 └── morpho-base.svg           # Официальная бабочка Morpho (источник)
 tests/
 ├── probe/                    # DOM-скрейпы против app.morpho.org
 └── e2e/
-    ├── extension.spec.ts     # Lend, dashboard mount, тёмная тема, провайдерный мост
-    ├── favorites.spec.ts     # Звёзды + фильтр + персистентность (через postMessage-мост)
+    ├── extension.spec.ts     # Lend, dashboard mount, тёмная тема, изоляция кошелька
+    ├── favorites.spec.ts     # Звёзды + фильтр + хранение extension storage
     ├── popup.spec.ts         # Popup на панели — вкладки, сортировка, V1/V2 vault, кеш, refresh
     └── screenshots.spec.ts   # Скриншоты README / листинга (моковые данные)
 ```
@@ -177,9 +180,9 @@ tests/
 ## Безопасность
 
 - Состояние контракта читается через публичные RPC (fallback по 4 провайдера на сеть в viem). Записи идут через кошелёк пользователя — расширение не удерживает и не запрашивает приватные ключи.
-- Все записи симулируются через `simulateContract` перед `writeContract`, чтобы revert-ы проявлялись читаемой ошибкой до prompt-а кошелька.
+- Записи Morpho, approve и unwrap симулируются до prompt-а кошелька; native wrap отправляется напрямую. Перед следующим шагом проверяется успешный receipt каждой транзакции.
 - Полный withdraw использует shares (а не assets), чтобы избежать revert-ов из-за точности при накоплении процентов; частичный withdraw использует assets с допуском 0.01%.
-- Host permissions ограничены `https://app.morpho.org/*`. Из Chrome API используется только `chrome.storage.local` (избранное + кеш данных popup). Никакие данные не отправляются кому-либо, кроме настроенных пользователем RPC, `blue-api.morpho.org` и CDN Morpho (`cdn.morpho.org`) с логотипами токенов.
+- Host permissions ограничены `https://app.morpho.org/*`. `storage` локально хранит избранное и кеш; `scripting` выполняет только wallet RPC с проверенным sender и allow-list методов. Данные уходят лишь в настроенные RPC, `blue-api.morpho.org` и CDN логотипов Morpho.
 
 ## Известные ограничения
 

@@ -4,6 +4,37 @@ All notable changes to Morpho Enhancements are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [SemVer](https://semver.org/).
 
+## [0.4.0] — 2026-08-03
+
+### Changed
+
+- Updated all integrations to Morpho's current `/variable` market list,
+  `/{chain}/variable/{marketId}/{slug}` market, and `/portfolio/{address}` routes.
+- Matched the Lend panel to Morpho's native Borrow controls, input and summary
+  cards, typography, spacing, token icons, light/dark themes, and primary action.
+- Replaced the page-level wallet bridge with a sender-validated service worker
+  and allow-listed, single-request MAIN-world execution. Multiple injected
+  wallets are pinned to the connected account.
+- Batched popup market queries by chain, paginated dashboard positions, added
+  GraphQL timeouts, and made dashboard layout responsive.
+
+### Fixed
+
+- Keep the wallet connection action enabled before an amount is entered.
+- Reject mismatched on-chain market parameters, over-precision token amounts,
+  wrong wallet networks/accounts, failed transaction receipts, and stale data
+  refresh failures before continuing a transaction flow.
+- Use exact ERC-20 approvals with a zero-reset fallback and reserve dynamic
+  native gas before wrapping.
+
+### Internal
+
+- Added focused unit coverage, native Borrow/Lend geometry assertions, live DOM
+  probes, extension E2E coverage, deterministic screenshot tests, and a complete
+  `pnpm test:release` release gate.
+- Added CI typecheck, unit-test, and production-build gates; release builds also
+  run extension E2E before packaging.
+
 ## [0.3.0] — 2026-04-26
 
 ### Added
@@ -107,5 +138,7 @@ Initial release.
 - Humanized error messages for common revert / rejection cases.
 - Chrome Web Store listing images at 1280×800.
 
+[0.4.0]: https://github.com/viaweb3/morpho-enhancements/releases/tag/v0.4.0
+[0.3.0]: https://github.com/viaweb3/morpho-enhancements/releases/tag/v0.3.0
 [0.2.0]: https://github.com/viaweb3/morpho-enhancements/releases/tag/v0.2.0
 [0.1.0]: https://github.com/viaweb3/morpho-enhancements/releases/tag/v0.1.0

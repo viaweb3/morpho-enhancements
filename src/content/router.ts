@@ -28,9 +28,22 @@ function ensureLocationChangeEvent() {
 
 export function watchRoute(listener: Listener): () => void {
   ensureLocationChangeEvent();
-  const emit = () => listener(matchRoute(location.pathname), location.pathname);
+  let lastPathname = location.pathname;
+  const emit = () => {
+    lastPathname = location.pathname;
+    listener(matchRoute(lastPathname), lastPathname);
+  };
   const handler = () => emit();
   window.addEventListener('locationchange', handler);
+  // pushState monkey-patches are not guaranteed to cross Chrome isolated-world
+  // boundaries. A cheap pathname-only poll prevents stale market parameters
+  // after client-side navigation even when the page replaces no watched node.
+  const poll = setInterval(() => {
+    if (location.pathname !== lastPathname) emit();
+  }, 500);
   emit();
-  return () => window.removeEventListener('locationchange', handler);
+  return () => {
+    clearInterval(poll);
+    window.removeEventListener('locationchange', handler);
+  };
 }

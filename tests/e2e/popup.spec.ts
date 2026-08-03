@@ -3,12 +3,12 @@ import {
   expect,
   chromium,
   type BrowserContext,
-  type Page,
 } from '@playwright/test';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { getExtensionId, setExtensionStorage } from './extensionStorage';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const EXT_PATH = join(__dirname, '..', '..', 'dist');
@@ -20,6 +20,7 @@ let extensionId: string;
 test.beforeAll(async () => {
   userDataDir = mkdtempSync(join(tmpdir(), 'morpho-ext-popup-'));
   ctx = await chromium.launchPersistentContext(userDataDir, {
+    executablePath: process.env.PLAYWRIGHT_CHROME_EXECUTABLE,
     headless: false,
     viewport: { width: 1440, height: 900 },
     args: [
@@ -30,24 +31,7 @@ test.beforeAll(async () => {
     ],
   });
 
-  // Discover the extension id via the test postMessage bridge.
-  const probe = await ctx.newPage();
-  await probe.goto('https://app.morpho.org/');
-  extensionId = await probe.evaluate(
-    () =>
-      new Promise<string>((resolve) => {
-        const handler = (e: MessageEvent) => {
-          const data = e.data as { type?: string; id?: string } | null;
-          if (e.source === window && data?.type === 'morpho-ext-test:extension-id') {
-            window.removeEventListener('message', handler);
-            resolve(data.id ?? '');
-          }
-        };
-        window.addEventListener('message', handler);
-        window.postMessage({ type: 'morpho-ext-test:get-extension-id' }, '*');
-      }),
-  );
-  await probe.close();
+  extensionId = await getExtensionId(ctx);
   if (!extensionId) throw new Error('Could not discover extension id');
 });
 
@@ -60,82 +44,9 @@ function popupUrl(): string {
   return `chrome-extension://${extensionId}/src/popup/index.html`;
 }
 
-// The favorites bridge sits in a content script that loads at
-// `document_idle`. Probing for it BEFORE every state-modifying call
-// avoids a class of flakes where postMessage gets dropped because the
-// listener isn't wired yet.
-async function waitForBridge(page: Page): Promise<void> {
-  await page.waitForFunction(
-    () =>
-      new Promise<boolean>((resolve) => {
-        const timeout = setTimeout(() => resolve(false), 800);
-        const handler = (e: MessageEvent) => {
-          const data = e.data as { type?: string } | null;
-          if (e.source === window && data?.type === 'morpho-ext-test:extension-id') {
-            clearTimeout(timeout);
-            window.removeEventListener('message', handler);
-            resolve(true);
-          }
-        };
-        window.addEventListener('message', handler);
-        window.postMessage({ type: 'morpho-ext-test:get-extension-id' }, '*');
-      }),
-    { timeout: 15_000 },
-  );
-}
-
-async function clearFavorites(page: Page): Promise<void> {
-  await waitForBridge(page);
-  await page.evaluate(
-    () =>
-      new Promise<void>((resolve) => {
-        const handler = (e: MessageEvent) => {
-          if (
-            e.source === window &&
-            (e.data as { type?: string } | null)?.type ===
-              'morpho-ext-test:cleared'
-          ) {
-            window.removeEventListener('message', handler);
-            resolve();
-          }
-        };
-        window.addEventListener('message', handler);
-        window.postMessage({ type: 'morpho-ext-test:clear-favorites' }, '*');
-      }),
-  );
-}
-
-async function seedFavorites(page: Page, keys: string[]): Promise<void> {
-  await waitForBridge(page);
-  await page.evaluate(
-    (k) =>
-      new Promise<void>((resolve) => {
-        const handler = (e: MessageEvent) => {
-          if (
-            e.source === window &&
-            (e.data as { type?: string } | null)?.type ===
-              'morpho-ext-test:seeded'
-          ) {
-            window.removeEventListener('message', handler);
-            resolve();
-          }
-        };
-        window.addEventListener('message', handler);
-        window.postMessage(
-          { type: 'morpho-ext-test:set-favorites', keys: k },
-          '*',
-        );
-      }),
-    keys,
-  );
-}
-
 // Each test starts from a clean favorites slate.
 test.beforeEach(async () => {
-  const page = await ctx.newPage();
-  await page.goto('https://app.morpho.org/', { waitUntil: 'domcontentloaded' });
-  await clearFavorites(page);
-  await page.close();
+  await setExtensionStorage(ctx, 'morpho-ext:favorites', []);
 });
 
 test('popup opens with Prime tab default and renders 19 curated markets', async () => {
@@ -185,12 +96,9 @@ test('switching to empty Favorites tab shows the empty-state copy', async () => 
 
 test('seeded V1 market favorite appears in Favorites tab with live data', async () => {
   // Seed a known live V1 market: cbBTC/USDC on Mainnet (in CURATED_MARKETS).
-  const seedPage = await ctx.newPage();
-  await seedPage.goto('https://app.morpho.org/');
-  await seedFavorites(seedPage, [
+  await setExtensionStorage(ctx, 'morpho-ext:favorites', [
     'market:ethereum:0x64d65c9a2d91c36d56fbc42d69e979335320169b3df63bf92789e2c8883fcc64',
   ]);
-  await seedPage.close();
 
   const page = await ctx.newPage();
   await page.goto(popupUrl());
@@ -210,12 +118,9 @@ test('seeded V1 market favorite appears in Favorites tab with live data', async 
 
 test('seeded V2 vault favorite renders name (not address) and V2 chip', async () => {
   // sky.money USDT Savings — confirmed V2 vault on Mainnet earlier.
-  const seedPage = await ctx.newPage();
-  await seedPage.goto('https://app.morpho.org/');
-  await seedFavorites(seedPage, [
+  await setExtensionStorage(ctx, 'morpho-ext:favorites', [
     'vault:ethereum:0x23f5e9c35820f4bab695ac1f19c203cc3f8e1e11',
   ]);
-  await seedPage.close();
 
   const page = await ctx.newPage();
   await page.goto(popupUrl());

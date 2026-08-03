@@ -7,20 +7,21 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { getExtensionId, setExtensionStorage } from './extensionStorage';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const EXT_PATH = join(__dirname, '..', '..', 'dist');
 const OUT_DIR = join(__dirname, '..', '..', 'docs', 'screenshots');
 
 const MARKET_URL =
-  'https://app.morpho.org/ethereum/market/0xa921ef34e2fc7a27ccc50ae7e4b154e16c9799d3387076c421423ef52ac4df99/wbtc-usdt';
-const MARKETS_LIST_URL = 'https://app.morpho.org/markets';
+  'https://app.morpho.org/ethereum/variable/0xa921ef34e2fc7a27ccc50ae7e4b154e16c9799d3387076c421423ef52ac4df99/wbtc-usdt';
+const MARKETS_LIST_URL = 'https://app.morpho.org/variable';
 const VAULTS_LIST_URL = 'https://app.morpho.org/vaults';
 // A deterministic demo address — the actual value doesn't matter because
 // the API response is mocked. Using 0xdead…beef makes it obvious in any
 // leftover UI chrome that this is a demo screenshot.
 const DEMO_ADDRESS = '0xdEaDbeefdeadBEefdEAdbeefDeadbEefDeAdBeEf';
-const DASHBOARD_URL = `https://app.morpho.org/dashboard/${DEMO_ADDRESS}`;
+const DASHBOARD_URL = `https://app.morpho.org/portfolio/${DEMO_ADDRESS}`;
 
 let ctx: BrowserContext;
 let userDataDir: string;
@@ -29,6 +30,7 @@ test.beforeAll(async () => {
   mkdirSync(OUT_DIR, { recursive: true });
   userDataDir = mkdtempSync(join(tmpdir(), 'morpho-shots-'));
   ctx = await chromium.launchPersistentContext(userDataDir, {
+    executablePath: process.env.PLAYWRIGHT_CHROME_EXECUTABLE,
     headless: false,
     viewport: { width: 1440, height: 900 },
     args: [
@@ -59,14 +61,16 @@ async function mockPositions(page: Page) {
             marketPositions: {
               items: [
                 {
-                  supplyShares: '1000000000000000000000',
-                  supplyAssets: '1234560000',
-                  supplyAssetsUsd: 1234.56,
-                  borrowShares: '0',
-                  borrowAssets: '0',
-                  borrowAssetsUsd: 0,
-                  collateral: '0',
-                  collateralUsd: 0,
+                  state: {
+                    supplyShares: '1000000000000000000000',
+                    supplyAssets: '1234560000',
+                    supplyAssetsUsd: 1234.56,
+                    borrowShares: '0',
+                    borrowAssets: '0',
+                    borrowAssetsUsd: 0,
+                    collateral: '0',
+                    collateralUsd: 0,
+                  },
                   market: {
                     uniqueKey:
                       '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
@@ -86,14 +90,16 @@ async function mockPositions(page: Page) {
                   },
                 },
                 {
-                  supplyShares: '500000000000000000000',
-                  supplyAssets: '789120000000000000',
-                  supplyAssetsUsd: 2468.91,
-                  borrowShares: '0',
-                  borrowAssets: '0',
-                  borrowAssetsUsd: 0,
-                  collateral: '0',
-                  collateralUsd: 0,
+                  state: {
+                    supplyShares: '500000000000000000000',
+                    supplyAssets: '789120000000000000',
+                    supplyAssetsUsd: 2468.91,
+                    borrowShares: '0',
+                    borrowAssets: '0',
+                    borrowAssetsUsd: 0,
+                    collateral: '0',
+                    collateralUsd: 0,
+                  },
                   market: {
                     uniqueKey:
                       '0xcafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe',
@@ -188,6 +194,7 @@ test.describe('store images (1280x800)', () => {
   test.beforeAll(async () => {
     storeDir = mkdtempSync(join(tmpdir(), 'morpho-shots-store-'));
     storeCtx = await chromium.launchPersistentContext(storeDir, {
+      executablePath: process.env.PLAYWRIGHT_CHROME_EXECUTABLE,
       headless: false,
       viewport: { width: 1280, height: 800 },
       args: [
@@ -358,9 +365,9 @@ test('shot: dashboard market lending card (dark)', async () => {
 // capture both the "all rows with stars" and "favorites-only" views.
 // ------------------------------------------------------------
 
-// Seed localStorage with N pre-starred rows before the real screenshot:
+// Seed extension storage with N pre-starred rows before the real screenshot:
 // 1) goto once just to discover the first N row keys,
-// 2) write them to localStorage,
+// 2) write them to chrome.storage.local in that page's browser context,
 // 3) reload so the extension marks those rows "on" on first render.
 // This avoids clicking stars in a loop, which tends to trigger Morpho's
 // table to re-fetch and blank out during screenshots.
@@ -379,28 +386,11 @@ async function seedFavoritesFromList(
         .map((el) => el.getAttribute('data-morpho-ext-fav-key'))
         .filter((k): k is string => !!k),
     n);
-  await page.evaluate(
-    (favs) =>
-      new Promise<void>((resolve) => {
-        const handler = (e: MessageEvent) => {
-          if (
-            e.source === window &&
-            (e.data as { type?: string } | null)?.type ===
-              'morpho-ext-test:seeded'
-          ) {
-            window.removeEventListener('message', handler);
-            resolve();
-          }
-        };
-        window.addEventListener('message', handler);
-        window.postMessage(
-          { type: 'morpho-ext-test:set-favorites', keys: favs },
-          '*',
-        );
-      }),
-    keys,
-  );
-  await page.reload();
+  await setExtensionStorage(page.context(), 'morpho-ext:favorites', keys);
+  // Morpho keeps optional third-party resources open long after its app DOM is
+  // ready. Waiting for the full `load` event makes this deterministic screenshot
+  // depend on those resources; the row assertion below is the real readiness gate.
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 60_000 });
   await page.waitForSelector('tbody tr[data-morpho-ext-fav="on"]', { timeout: 30_000 });
   // Let the rest of the table instrument + any number-flow animations settle.
   await page.waitForTimeout(800);
@@ -490,6 +480,7 @@ test.describe('store: favorites (1280x800)', () => {
   test.beforeAll(async () => {
     favDir = mkdtempSync(join(tmpdir(), 'morpho-shots-fav-'));
     favCtx = await chromium.launchPersistentContext(favDir, {
+      executablePath: process.env.PLAYWRIGHT_CHROME_EXECUTABLE,
       headless: false,
       viewport: { width: 1280, height: 800 },
       args: [
@@ -548,81 +539,9 @@ test.describe('store: favorites (1280x800)', () => {
 // --- Toolbar popup screenshots (v0.3.0+) ----------------------------------
 
 async function discoverExtensionId(): Promise<string> {
-  const probe = await ctx.newPage();
-  await probe.goto('https://app.morpho.org/', { waitUntil: 'domcontentloaded' });
-  // The favorites test bridge in the content script replies with chrome.runtime.id.
-  await probe.waitForFunction(
-    () =>
-      new Promise<boolean>((resolve) => {
-        const timeout = setTimeout(() => resolve(false), 800);
-        const handler = (e: MessageEvent) => {
-          const data = e.data as { type?: string } | null;
-          if (e.source === window && data?.type === 'morpho-ext-test:extension-id') {
-            clearTimeout(timeout);
-            window.removeEventListener('message', handler);
-            resolve(true);
-          }
-        };
-        window.addEventListener('message', handler);
-        window.postMessage({ type: 'morpho-ext-test:get-extension-id' }, '*');
-      }),
-    { timeout: 15_000 },
-  );
-  const id = await probe.evaluate(
-    () =>
-      new Promise<string>((resolve) => {
-        const handler = (e: MessageEvent) => {
-          const data = e.data as { type?: string; id?: string } | null;
-          if (e.source === window && data?.type === 'morpho-ext-test:extension-id') {
-            window.removeEventListener('message', handler);
-            resolve(data.id ?? '');
-          }
-        };
-        window.addEventListener('message', handler);
-        window.postMessage({ type: 'morpho-ext-test:get-extension-id' }, '*');
-      }),
-  );
-  await probe.close();
+  const id = await getExtensionId(ctx);
   if (!id) throw new Error('Could not discover extension id for popup screenshots');
   return id;
-}
-
-async function seedFavoritesViaBridge(page: Page, keys: string[]): Promise<void> {
-  await page.waitForFunction(
-    () =>
-      new Promise<boolean>((resolve) => {
-        const timeout = setTimeout(() => resolve(false), 800);
-        const handler = (e: MessageEvent) => {
-          const data = e.data as { type?: string } | null;
-          if (e.source === window && data?.type === 'morpho-ext-test:extension-id') {
-            clearTimeout(timeout);
-            window.removeEventListener('message', handler);
-            resolve(true);
-          }
-        };
-        window.addEventListener('message', handler);
-        window.postMessage({ type: 'morpho-ext-test:get-extension-id' }, '*');
-      }),
-    { timeout: 15_000 },
-  );
-  await page.evaluate(
-    (k) =>
-      new Promise<void>((resolve) => {
-        const handler = (e: MessageEvent) => {
-          const data = e.data as { type?: string } | null;
-          if (e.source === window && data?.type === 'morpho-ext-test:seeded') {
-            window.removeEventListener('message', handler);
-            resolve();
-          }
-        };
-        window.addEventListener('message', handler);
-        window.postMessage(
-          { type: 'morpho-ext-test:set-favorites', keys: k },
-          '*',
-        );
-      }),
-    keys,
-  );
 }
 
 const POPUP_VIEWPORT = { width: 400, height: 580 };
@@ -661,9 +580,7 @@ test('shot: popup Prime tab (dark)', async () => {
 test('shot: popup Favorites tab (light)', async () => {
   const id = await discoverExtensionId();
   // Seed a representative mix: V1 market, V1 vault, V2 vault.
-  const seed = await ctx.newPage();
-  await seed.goto('https://app.morpho.org/', { waitUntil: 'domcontentloaded' });
-  await seedFavoritesViaBridge(seed, [
+  await setExtensionStorage(ctx, 'morpho-ext:favorites', [
     // V1 market: cbBTC/USDC on Mainnet
     'market:ethereum:0x64d65c9a2d91c36d56fbc42d69e979335320169b3df63bf92789e2c8883fcc64',
     // V1 market: WETH/USDC on Base
@@ -673,7 +590,6 @@ test('shot: popup Favorites tab (light)', async () => {
     // V2 vault: sky.money USDT Savings on Mainnet
     'vault:ethereum:0x23f5e9c35820f4bab695ac1f19c203cc3f8e1e11',
   ]);
-  await seed.close();
 
   const page = await ctx.newPage();
   await page.setViewportSize(POPUP_VIEWPORT);
@@ -691,15 +607,12 @@ test('shot: popup Favorites tab (light)', async () => {
 
 test('shot: popup Favorites tab (dark)', async () => {
   const id = await discoverExtensionId();
-  const seed = await ctx.newPage();
-  await seed.goto('https://app.morpho.org/', { waitUntil: 'domcontentloaded' });
-  await seedFavoritesViaBridge(seed, [
+  await setExtensionStorage(ctx, 'morpho-ext:favorites', [
     'market:ethereum:0x64d65c9a2d91c36d56fbc42d69e979335320169b3df63bf92789e2c8883fcc64',
     'market:base:0x8793cf302b8ffd655ab97bd1c695dbd967807e8367a65cb2f4edaf1380ba1bda',
     'vault:ethereum:0xfeac08ffa38d95ec5ed7c46c933c8891a44c5f26',
     'vault:ethereum:0x23f5e9c35820f4bab695ac1f19c203cc3f8e1e11',
   ]);
-  await seed.close();
 
   const page = await ctx.newPage();
   await page.setViewportSize(POPUP_VIEWPORT);

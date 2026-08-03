@@ -7,7 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT = join(__dirname, 'out');
 
 const DASHBOARD_URL =
-  'https://app.morpho.org/dashboard/0x11111111652DeB43CF2ee68065E8296249428B61';
+  'https://app.morpho.org/portfolio/0x11111111652DeB43CF2ee68065E8296249428B61';
 
 test('describe dashboard layout tree', async ({ page }) => {
   await page.goto(DASHBOARD_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });

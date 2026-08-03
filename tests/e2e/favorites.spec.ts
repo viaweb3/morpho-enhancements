@@ -3,11 +3,12 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { getExtensionStorage, setExtensionStorage } from './extensionStorage';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const EXT_PATH = join(__dirname, '..', '..', 'dist');
 
-const MARKETS_URL = 'https://app.morpho.org/markets';
+const MARKETS_URL = 'https://app.morpho.org/variable';
 const VAULTS_URL = 'https://app.morpho.org/vaults';
 
 let ctx: BrowserContext;
@@ -16,6 +17,7 @@ let userDataDir: string;
 test.beforeAll(async () => {
   userDataDir = mkdtempSync(join(tmpdir(), 'morpho-ext-fav-'));
   ctx = await chromium.launchPersistentContext(userDataDir, {
+    executablePath: process.env.PLAYWRIGHT_CHROME_EXECUTABLE,
     headless: false,
     viewport: { width: 1440, height: 900 },
     args: [
@@ -33,84 +35,15 @@ test.afterAll(async () => {
 });
 
 test.beforeEach(async () => {
-  // Ensure favorites state from previous tests doesn't leak. Favorites
-  // live in chrome.storage.local (see src/lib/favorites.ts) which the
-  // page main world can't read directly; the content script exposes a
-  // postMessage test bridge for the E2E runner.
-  const page = await ctx.newPage();
-  await page.goto('https://app.morpho.org/');
-  await clearFavorites(page);
-  await page.close();
+  await setExtensionStorage(ctx, 'morpho-ext:favorites', []);
 });
-
-// Wait for the content-script test bridge to be live before we post —
-// the listener is registered at document_idle, so a too-eager call gets
-// silently dropped and the round-trip never resolves.
-async function waitForBridge(page: Page): Promise<void> {
-  await page.waitForFunction(
-    () =>
-      new Promise<boolean>((resolve) => {
-        const timeout = setTimeout(() => resolve(false), 800);
-        const handler = (e: MessageEvent) => {
-          const data = e.data as { type?: string } | null;
-          if (e.source === window && data?.type === 'morpho-ext-test:extension-id') {
-            clearTimeout(timeout);
-            window.removeEventListener('message', handler);
-            resolve(true);
-          }
-        };
-        window.addEventListener('message', handler);
-        window.postMessage({ type: 'morpho-ext-test:get-extension-id' }, '*');
-      }),
-    { timeout: 15_000 },
-  );
-}
-
-async function clearFavorites(page: Page): Promise<void> {
-  await waitForBridge(page);
-  await page.evaluate(
-    () =>
-      new Promise<void>((resolve) => {
-        const handler = (e: MessageEvent) => {
-          if (
-            e.source === window &&
-            (e.data as { type?: string } | null)?.type ===
-              'morpho-ext-test:cleared'
-          ) {
-            window.removeEventListener('message', handler);
-            resolve();
-          }
-        };
-        window.addEventListener('message', handler);
-        window.postMessage({ type: 'morpho-ext-test:clear-favorites' }, '*');
-      }),
-  );
-}
-
-async function getFavorites(page: Page): Promise<string[]> {
-  await waitForBridge(page);
-  return page.evaluate(
-    () =>
-      new Promise<string[]>((resolve) => {
-        const handler = (e: MessageEvent) => {
-          const data = e.data as { type?: string; keys?: string[] } | null;
-          if (e.source === window && data?.type === 'morpho-ext-test:favorites') {
-            window.removeEventListener('message', handler);
-            resolve(data.keys ?? []);
-          }
-        };
-        window.addEventListener('message', handler);
-        window.postMessage({ type: 'morpho-ext-test:get-favorites' }, '*');
-      }),
-  );
-}
 
 async function waitForStars(page: Page): Promise<number> {
   await page.waitForSelector('tbody tr[data-morpho-ext-fav-key]', { timeout: 30_000 });
   return page.locator('tbody tr[data-morpho-ext-fav-key]').count();
 }
 
-test('injects stars on /markets rows and filters to favorites', async () => {
+test('injects stars on /variable rows and filters to favorites', async () => {
   const page = await ctx.newPage();
   await page.goto(MARKETS_URL);
 
@@ -133,7 +66,7 @@ test('injects stars on /markets rows and filters to favorites', async () => {
   expect(favKey).toMatch(/^market:[a-z-]+:0x[a-f0-9]+$/);
 
   // Confirm persistence in chrome.storage (read via the test bridge).
-  const stored = await getFavorites(page);
+  const stored = await getExtensionStorage<string[]>(ctx, 'morpho-ext:favorites') ?? [];
   expect(stored).toContain(favKey);
 
   // Toggle the filter chip — non-starred rows should become hidden.
@@ -173,12 +106,12 @@ test('multiple favorites can be selected at once', async () => {
   await expect(rows.nth(1)).toHaveAttribute('data-morpho-ext-fav', 'on');
   await expect(rows.nth(2)).toHaveAttribute('data-morpho-ext-fav', 'on');
 
-  const stored = await getFavorites(page);
+  const stored = await getExtensionStorage<string[]>(ctx, 'morpho-ext:favorites') ?? [];
   expect(stored.length).toBeGreaterThanOrEqual(3);
 
   // Clicking the navigation (the <a>) should still work on unstarred areas.
-  // We verify the star click did NOT navigate — URL should still be /markets.
-  expect(page.url()).toContain('/markets');
+  // We verify the star click did NOT navigate — URL should still be /variable.
+  expect(page.url()).toContain('/variable');
 });
 
 test('stars also work on /vaults and persist across navigation', async () => {
@@ -195,7 +128,7 @@ test('stars also work on /vaults and persist across navigation', async () => {
   const key = await firstRow.getAttribute('data-morpho-ext-fav-key');
   expect(key).toMatch(/^vault:[a-z-]+:0x[a-f0-9]+$/);
 
-  // Navigate to /markets and back — favorite persists.
+  // Navigate to /variable and back — favorite persists.
   await page.goto(MARKETS_URL);
   await waitForStars(page);
   await page.goto(VAULTS_URL);

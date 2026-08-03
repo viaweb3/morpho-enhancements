@@ -8,7 +8,7 @@ const OUT = join(__dirname, 'out');
 mkdirSync(OUT, { recursive: true });
 
 const MARKET_URL =
-  'https://app.morpho.org/ethereum/market/0xa921ef34e2fc7a27ccc50ae7e4b154e16c9799d3387076c421423ef52ac4df99/wbtc-usdt';
+  'https://app.morpho.org/ethereum/variable/0xa921ef34e2fc7a27ccc50ae7e4b154e16c9799d3387076c421423ef52ac4df99/wbtc-usdt';
 
 test('describe all primary buttons + CSS token names', async ({ page }) => {
   await page.goto(MARKET_URL);

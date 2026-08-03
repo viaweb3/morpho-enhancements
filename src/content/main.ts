@@ -141,12 +141,12 @@ function scheduleReconcileCheck() {
   const run = () => {
     tickScheduled = false;
     const parts = location.pathname.split('/').filter(Boolean);
-    if (parts[1] === 'market') {
+    if (parts[1] === 'variable') {
       const panel = findMarketAnchor();
       if (panel && !isMarketIntegrationAttached(panel)) {
         window.dispatchEvent(new Event('locationchange'));
       }
-    } else if (parts[0] === 'dashboard') {
+    } else if (parts[0] === 'portfolio') {
       if (!dashboardMount?.isStillAttached()) {
         window.dispatchEvent(new Event('locationchange'));
       }

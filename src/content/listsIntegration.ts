@@ -1,4 +1,4 @@
-// Favorites injection for /markets and /vaults list pages.
+// Favorites injection for /variable and /vaults list pages.
 //
 // Strategy:
 //   - Each row's first anchor href encodes {chain, kind, id}. Extract a

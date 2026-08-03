@@ -65,9 +65,13 @@ function ensureStylesheet() {
       --mx-fg-disabled: rgba(25, 29, 32, 0.45);
       --mx-surface: rgba(25, 29, 32, 0.04);
       --mx-surface-hover: rgba(25, 29, 32, 0.08);
-      --mx-tab-active-bg: rgba(25, 29, 32, 0.08);
       --mx-tab-hover-bg: rgba(25, 29, 32, 0.05);
       --mx-disabled-bg: rgba(25, 29, 32, 0.08);
+      --mx-border: rgba(25, 29, 32, 0.14);
+      --mx-ring: rgba(15, 90, 230, 0.85);
+      --mx-control-bg: rgba(25, 29, 32, 0.04);
+      --mx-control-active: rgb(250, 252, 255);
+      --mx-primary: rgba(15, 90, 230, 0.9);
     }
     [data-testid="market-action-panel"][data-morpho-ext-theme="dark"] {
       --mx-fg: rgba(255, 255, 255, 0.95);
@@ -75,9 +79,13 @@ function ensureStylesheet() {
       --mx-fg-disabled: rgba(255, 255, 255, 0.4);
       --mx-surface: rgba(255, 255, 255, 0.06);
       --mx-surface-hover: rgba(255, 255, 255, 0.1);
-      --mx-tab-active-bg: rgba(255, 255, 255, 0.12);
       --mx-tab-hover-bg: rgba(255, 255, 255, 0.08);
       --mx-disabled-bg: rgba(255, 255, 255, 0.08);
+      --mx-border: rgba(255, 255, 255, 0.12);
+      --mx-ring: rgba(66, 130, 255, 0.9);
+      --mx-control-bg: rgba(255, 255, 255, 0.06);
+      --mx-control-active: rgba(255, 255, 255, 0.12);
+      --mx-primary: rgb(47, 111, 238);
     }
     [data-testid="market-action-panel"][${TAB_ATTR}="lend"] > :not(.${TABSTRIP_CLASS}):not(.${LEND_HOST_CLASS}) {
       display: none !important;
@@ -95,11 +103,11 @@ function ensureStylesheet() {
       border: none;
       background: transparent;
       color: var(--mx-fg);
-      font-size: 14px;
-      font-weight: 500;
+      font-size: 12px;
+      font-weight: 400;
       line-height: 1;
-      height: 26px;
-      padding: 0 10px;
+      height: 32px;
+      padding: 4px 12px;
       border-radius: 8px;
       cursor: pointer;
       transition: background-color 120ms ease;
@@ -111,7 +119,8 @@ function ensureStylesheet() {
       background: var(--mx-tab-hover-bg);
     }
     .mx-tab[aria-selected="true"] {
-      background: var(--mx-tab-active-bg);
+      background: var(--mx-control-active);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
     }
     .${LEND_HOST_CLASS} {
       display: contents;
@@ -179,8 +188,13 @@ export function setupMarketIntegration(
 
   ensureStylesheet();
 
-  // Original tab strip is the first child of the panel
-  const originalTabStrip = panel.firstElementChild as HTMLElement | null;
+  // Find the native Borrow tab semantically instead of assuming that it is
+  // always the first panel child. Morpho occasionally inserts banners above it.
+  const originalTabStrip = Array.from(panel.children).find((child) =>
+    Array.from(child.querySelectorAll('button,[role="tab"]')).some(
+      (button) => button.textContent?.trim().toLowerCase() === 'borrow',
+    ),
+  ) as HTMLElement | undefined;
   if (!originalTabStrip) return null;
 
   // Hide the original tab strip (only has one button) and insert ours

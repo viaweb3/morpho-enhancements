@@ -80,7 +80,7 @@ function hexToRgba(hex: string, alpha: number): string {
 }
 
 function marketUrl(slug: string, marketId: string): string {
-  return `https://app.morpho.org/${slug}/market/${marketId}`;
+  return `https://app.morpho.org/${slug}/variable/${marketId}`;
 }
 
 function vaultUrl(slug: string, address: string): string {
@@ -414,7 +414,7 @@ function FavoritesList({ ready, sort }: { ready: boolean; sort: SortMode }) {
       <div className="p-empty">
         <span className="p-empty-icon" aria-hidden="true">★</span>
         <strong>No favorites yet</strong>
-        Open <code>/markets</code> or <code>/vaults</code> on app.morpho.org and
+        Open <code>/variable</code> or <code>/vaults</code> on app.morpho.org and
         tap the star on any row to pin it here.
       </div>
     );

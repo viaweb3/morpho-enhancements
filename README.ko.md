@@ -8,7 +8,7 @@
 
 2. **대시보드 가시성** — 공식 대시보드는 vault 예치와 차입 포지션만 표시하며 직접 예치는 보여주지 않습니다. 본 확장은 **Market Lending** 카드를 추가해, Morpho 지원 전 체인에서의 직접 예치를 USD 금액·APY·마켓 바로가기와 함께 표시합니다.
 
-3. **`/markets` 와 `/vaults` 즐겨찾기** — 행 앞의 별로 아무 마켓/vault 나 북마크한 뒤, 좌측 하단의 **Favorites only** 칩으로 관심있는 몇 개만 남깁니다. 브라우저에 저장되고 탭 간 동기화됩니다.
+3. **`/variable` 와 `/vaults` 즐겨찾기** — 행 앞의 별로 아무 마켓/vault 나 북마크한 뒤, 좌측 하단의 **Favorites only** 칩으로 관심있는 몇 개만 남깁니다. 브라우저에 저장되고 탭 간 동기화됩니다.
 
 4. **툴바 popup 빠른 보기** — 확장 아이콘 클릭만으로: *Prime* 탭은 Mainnet / Base / Arbitrum / OP 의 엄선된 19 개 블루칩 마켓을 supply APY、TVL、이용률、LLTV 와 함께 표시. *Favorites* 탭은 즐겨찾기한 마켓과 vault(V1 / V2 MetaMorpho 모두 지원). APY 또는 TVL 로 정렬 가능, 행 클릭으로 app.morpho.org 의 해당 페이지로 이동.
 
@@ -49,8 +49,8 @@
 
 - **Borrow | Lend 탭** — 마켓 패널에 Lend 탭이 추가됩니다. 라이트/다크 모두에서 Morpho 시각 언어에 맞춘 Supply / Withdraw UI 로 전환됩니다.
 - **ETH / WETH 자동 래핑** — 대출 자산이 해당 체인의 wrapped-native 토큰일 때, 네이티브 통화(Polygon 의 POL, Monad 의 MON, HyperEVM 의 HYPE 등)로 결제할 수 있는 토글이 나타납니다. Supply 전 자동 wrap, Withdraw 후 자동 unwrap — 서명은 총 2 회, 별도 wrap 화면 이동 없음.
-- **멀티체인 대시보드** — Market Lending 카드는 Morpho 가 지원하는 모든 체인을 한 번의 요청으로 조회합니다. 실제 체인 목록은 [src/services/chain/morphoSupportedChains.ts](src/services/chain/morphoSupportedChains.ts) 에 관리됩니다.
-- **리스트 페이지 즐겨찾기** — `/markets` 와 `/vaults` 의 마켓/vault 에 별 표시를 하고, 원클릭 칩으로 내 선택만 남도록 필터. `chrome.storage.local` 만 사용(서버·추적 없음), `chrome.storage.onChanged` 로 탭 간 및 popup 과 동기화.
+- **멀티체인 대시보드** — Market Lending 카드는 Morpho 가 지원하는 모든 체인을 한 번의 요청으로 조회합니다. 실제 체인 목록은 [src/lib/chains.ts](src/lib/chains.ts) 에 관리됩니다.
+- **리스트 페이지 즐겨찾기** — `/variable` 와 `/vaults` 의 마켓/vault 에 별 표시를 하고, 원클릭 칩으로 내 선택만 남도록 필터. `chrome.storage.local` 만 사용(서버·추적 없음), `chrome.storage.onChanged` 로 탭 간 및 popup 과 동기화.
 - **툴바 popup 두 탭** — *Prime*(Mainnet / Base / Arbitrum / OP 의 엄선된 19 개 블루칩 마켓) + *Favorites*(즐겨찾기한 마켓과 vault, V1 / V2 MetaMorpho 모두 지원, 행 안에 `V1`/`V2` 작은 칩). Stale-while-revalidate 캐시: 5 분 메모리 + `chrome.storage.local` 영속화로, popup 을 다시 열어도 첫 프레임에 마지막 데이터가 보이고 백그라운드에서 새로 가져옵니다. APY ↓ 또는 TVL ↓ 정렬 가능.
 - **페이지 지갑 재사용** — 두 번째 connect 흐름 없음. MetaMask, Rabby, Frame, Coinbase Wallet, EIP-6963 호환 주입 지갑 모두 지원.
 - **비표준 ERC-20 지원** — USDT(및 `approve` 가 데이터를 반환하지 않는 기타 토큰)가 그대로 동작합니다. approve ABI 를 no outputs 로 선언하여 viem 의 simulation 이 `0x` 에서 실패하지 않습니다.
@@ -60,9 +60,9 @@
 ## 동작 방식
 
 - **컨트랙트** — 모든 읽기/쓰기는 Morpho Blue 싱글톤 `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb` (지원 체인 전체에서 CREATE2 로 동일 주소) 를 통해 이뤄집니다. `idToMarketParams(id)` 로 URL 의 market id 를 온체인 파라미터로 해석하고, `supply(params, assets, 0, onBehalf, "0x")` 로 예치, `position(id, user)` + `market(id)` 로 잔액 계산.
-- **지갑 브리지** — `world: "MAIN"` content script 가 EIP-6963 discovery (+ 기존 `window.ethereum` 폴백) 를 구현하고, EIP-1193 요청을 `window.postMessage` 로 isolated content script 에 프록시합니다. UI 는 그 위에 viem `WalletClient` 를 올리며 키를 보유하지 않습니다.
+- **지갑 호출 중계** — wallet request 는 isolated content script 에서 extension service worker 로 전달됩니다. worker 가 발신자와 RPC method 를 검증한 뒤 `MAIN` world 에서 제한된 EIP-6963 / `window.ethereum` request 를 실행합니다. 페이지 script 는 `window.postMessage` 로 wallet path 를 호출할 수 없으며 확장은 키를 보유하지 않습니다.
 - **데이터** — `https://blue-api.morpho.org/graphql` 에 대한 경량 GraphQL 로 APY 와 USD 를 조회. Shares-to-assets 계산은 직접 온체인 read 를 위해 `sharesMath.ts` 에도 로컬 포팅되어 있습니다.
-- **UI** — React 19 이 Shadow DOM 안에 마운트되어 확장 스타일이 Morpho 페이지로 새지 않고 그 반대도 마찬가지입니다. SPA 전환은 `history.pushState` / `replaceState` 패치와, 애니메이션 기반 변동을 무시하는 스로틀된 `MutationObserver` 로 포착합니다.
+- **UI** — 독립 Dashboard widget 은 React 19 + Shadow DOM 을 사용하고, market Lend form 은 Morpho 기본 Borrow design token 과 utility class 를 상속하도록 light DOM 에 마운트됩니다. SPA 전환은 `history.pushState` / `replaceState` 패치와 animation 기반 변동을 무시하는 throttle 된 `MutationObserver` 로 포착합니다.
 
 ## 지원 체인
 
@@ -108,11 +108,15 @@ pnpm build
 ## 테스트
 
 ```bash
+# 전체 release gate: logic, build, live DOM probe, extension E2E,
+# screenshot, Chrome Web Store ZIP
+pnpm test:release
+
 # 실제 사이트에 대한 DOM 프로브 (앵커와 샘플 레이아웃 JSON 캡처)
 pnpm probe
 
 # End-to-end — 빌드된 확장으로 Chromium 구동. Lend 탭, 대시보드 마운트,
-# 다크 모드 가독성, provider bridge, 즐겨찾기 별 + 필터, 그리고 툴바 popup
+# 다크 모드 가독성, wallet isolation, 즐겨찾기 별 + 필터, 그리고 툴바 popup
 # (탭, 정렬, V1/V2 vault 렌더링, chrome.storage 캐시) 검증
 pnpm test:e2e
 ```
@@ -127,22 +131,23 @@ pnpm exec playwright test tests/e2e/screenshots.spec.ts
 
 ```
 src/
+├── background.ts             # 발신자 검증 및 allow-list wallet RPC service
 ├── manifest.config.ts        # MV3 manifest 선언
 ├── content/
 │   ├── main.ts               # ISOLATED world — SPA 라우트 감시 + 마운트 디스패처
 │   ├── mount.ts              # Shadow DOM 호스트 + React root + 테마 동기화
 │   ├── router.ts             # pushState/replaceState → locationchange 이벤트
 │   ├── marketIntegration.ts  # 마켓 패널에 Borrow | Lend 탭 주입
-│   └── listsIntegration.ts   # /markets 와 /vaults 의 즐겨찾기 별 + filter chip
+│   └── listsIntegration.ts   # /variable 와 /vaults 의 즐겨찾기 별 + filter chip
 ├── lib/
 │   ├── morpho.ts             # viem public client + Morpho 컨트랙트 헬퍼
 │   ├── morphoAbi.ts          # IMorpho + ERC20 + WETH9 ABI
 │   ├── sharesMath.ts         # SharesMathLib 포팅 (virtual shares/assets)
 │   ├── chains.ts             # Slug ↔ chain ID, wrapped-native, RPC 폴백 목록
 │   ├── url.ts                # 라우트 매처 (market / dashboard / list / other)
-│   ├── favorites.ts          # chrome.storage.local 기반 즐겨찾기 + 탭 간 동기화 + E2E 브리지
+│   ├── favorites.ts          # chrome.storage.local 기반 즐겨찾기 + 탭 간 동기화
 │   ├── graphql.ts            # blue-api 클라이언트(마켓, V1/V2 vault, 배치 + SWR 캐시)
-│   └── pageProvider.ts       # 브리지 클라이언트 + viem WalletClient 어댑터
+│   └── pageProvider.ts       # service-worker RPC client + viem WalletClient adapter
 ├── ui/
 │   ├── MarketLendForm.tsx    # 마켓 페이지 Supply / Withdraw 폼 (wrap 토글 포함)
 │   ├── DashboardSupplyCard.tsx
@@ -159,17 +164,15 @@ src/
 │   └── curatedMarkets.ts     # Prime 엄선 목록 (19 개 마켓, 수동 관리)
 public/
 ├── icons/                    # scripts/make-logo.py 로 생성 (16/32/48/128)
-├── logo.svg                  # 마스터 벡터 (Morpho 나비 + enhancement 배지)
-└── injected/
-    └── provider-bridge.js    # 앱 코드와 번들되지 않는 MAIN-world 순수 JS 브리지
+└── logo.svg                  # 마스터 벡터 (Morpho 나비 + enhancement 배지)
 scripts/
 ├── make-logo.py              # morpho-base.svg 에서 확장 아이콘 재생성
 └── morpho-base.svg           # 공식 Morpho 나비 (소스)
 tests/
 ├── probe/                    # app.morpho.org DOM 스크레이프
 └── e2e/
-    ├── extension.spec.ts     # Lend 탭, 대시보드 마운트, 다크 모드, provider bridge
-    ├── favorites.spec.ts     # 별 + 필터 + 영속화 (postMessage 테스트 브리지 사용)
+    ├── extension.spec.ts     # Lend 탭, 대시보드 마운트, 다크 모드, wallet isolation
+    ├── favorites.spec.ts     # 별 + 필터 + extension storage 영속화
     ├── popup.spec.ts         # 툴바 popup — 탭, 정렬, V1/V2 vault, 캐시, 새로고침
     └── screenshots.spec.ts   # README / 스토어 스크린샷 (mock 데이터)
 ```
@@ -177,9 +180,9 @@ tests/
 ## 보안
 
 - 컨트랙트 상태는 public RPC 로 읽습니다 (viem 가 체인별 4 개 provider 폴백). 쓰기는 사용자 지갑을 거치며, 확장은 개인키를 보유하거나 요청하지 않습니다.
-- 모든 쓰기는 `writeContract` 이전에 `simulateContract` 로 선행 시뮬레이션하여, revert 가 지갑 프롬프트 전에 읽기 쉬운 에러로 표면화됩니다.
+- Morpho, approve, unwrap 쓰기는 wallet prompt 전에 simulate 합니다. native wrap 은 직접 제출하며 각 receipt 성공을 확인한 뒤 다음 단계로 진행합니다.
 - 전액 출금은 이자 누적 시 정밀도 revert 를 피하기 위해 shares 기준, 부분 출금은 0.01% 허용 오차로 assets 기준을 사용합니다.
-- Host permissions 는 `https://app.morpho.org/*` 으로 한정. Chrome API 는 `chrome.storage.local`(즐겨찾기 + popup 데이터 캐시)만 사용. 사용자가 구성한 RPC, `blue-api.morpho.org`, Morpho 의 토큰 로고 CDN(`cdn.morpho.org`) 외에는 어떤 서비스로도 데이터를 보내지 않습니다.
+- Host permissions 는 `https://app.morpho.org/*` 로 한정됩니다. `storage` 는 즐겨찾기와 cache 를 local 에만 저장하고, `scripting` 은 sender 검증 및 allow-list 를 통과한 wallet RPC 만 실행합니다. 설정된 RPC, `blue-api.morpho.org`, Morpho token-logo CDN 외에는 데이터를 보내지 않습니다.
 
 ## 알려진 제한
 

@@ -10,8 +10,18 @@ export default defineConfig({
     headless: false,
     viewport: { width: 1440, height: 900 },
     trace: 'retain-on-failure',
+    launchOptions: {
+      // Allows release testing against the locally installed stable Chrome
+      // without downloading Playwright's bundled Chromium.
+      executablePath: process.env.PLAYWRIGHT_CHROME_EXECUTABLE,
+    },
   },
   projects: [
+    {
+      name: 'unit',
+      testMatch: /unit\/.*\.spec\.ts/,
+      use: { headless: true },
+    },
     {
       name: 'probe',
       testMatch: /probe\/.*\.spec\.ts/,

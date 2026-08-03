@@ -8,7 +8,7 @@ A Chrome extension that fills four gaps in [app.morpho.org](https://app.morpho.o
 
 2. **Dashboard visibility** — the dashboard lists vault deposits and borrow positions, but not direct-market supplies. This extension adds a **Market Lending** card that shows every market where the user is a direct lender, across every chain Morpho supports, with USD value, APY, and a shortcut back to the market page.
 
-3. **Favorites** on `/markets` and `/vaults` — star any row, then toggle a **Favorites only** chip to filter the list down to the handful you actually care about. Favorites persist in-browser and sync across tabs.
+3. **Favorites** on `/variable` and `/vaults` — star any row, then toggle a **Favorites only** chip to filter the list down to the handful you actually care about. Favorites persist in-browser and sync across tabs.
 
 4. **Toolbar popup** — click the extension icon for an instant quick-view: *Prime* tab lists 19 hand-curated blue-chip markets across Mainnet / Base / Arbitrum / OP with live supply APY, TVL, utilization, and LLTV; *Favorites* tab shows everything you've starred (V1 and V2 vaults, markets) with the same live data. Sort by APY or TVL. Click any row to jump to the corresponding page on app.morpho.org.
 
@@ -49,8 +49,8 @@ A Chrome extension that fills four gaps in [app.morpho.org](https://app.morpho.o
 
 - **Borrow | Lend tabs** on the market panel. Clicking Lend swaps the native form for a supply / withdraw UI that matches Morpho's visual language in both light and dark mode.
 - **ETH / WETH wrap toggle** when the loan asset is the chain's wrapped-native token. Pay with native ETH (or POL on Polygon, MON on Monad, HYPE on HyperEVM) — the extension auto-wraps before supply and auto-unwraps after withdraw. Two signatures total; no separate wrap UX trip.
-- **Multi-chain dashboard** — Market Lending card queries every chain Morpho supports in one request. The live chain list is maintained in [src/services/chain/morphoSupportedChains.ts](src/services/chain/morphoSupportedChains.ts).
-- **Favorites on list pages** — star markets and vaults in `/markets` and `/vaults`, then filter the table down to just your picks with a one-click chip. Stored in `chrome.storage.local` only (no server, no tracking); syncs across tabs and into the toolbar popup via `chrome.storage.onChanged`.
+- **Multi-chain dashboard** — Market Lending card queries every chain Morpho supports in one request. The live chain list is maintained in [src/lib/chains.ts](src/lib/chains.ts).
+- **Favorites on list pages** — star markets and vaults in `/variable` and `/vaults`, then filter the table down to just your picks with a one-click chip. Stored in `chrome.storage.local` only (no server, no tracking); syncs across tabs and into the toolbar popup via `chrome.storage.onChanged`.
 - **Toolbar popup** with two tabs — *Prime* (19 hand-curated blue-chip markets across Mainnet / Base / Arbitrum / OP) and *Favorites* (your starred markets and vaults; V1 and V2 MetaMorpho both supported with a small `V1`/`V2` chip). Stale-while-revalidate caching: 5-minute in-memory + `chrome.storage.local` persistence so reopening the popup paints last-known data instantly while a fresh fetch runs in the background. Sort by APY ↓ or TVL ↓.
 - **Reuses the page's wallet** — no second connect flow. Works with MetaMask, Rabby, Frame, Coinbase Wallet, and any EIP-6963–compliant injection.
 - **Non-standard ERC-20 support** — USDT (and other tokens whose `approve` returns no data) work out of the box; the approve ABI is declared with no outputs so viem's simulation doesn't fail on `0x`.
@@ -60,9 +60,9 @@ A Chrome extension that fills four gaps in [app.morpho.org](https://app.morpho.o
 ## How it works
 
 - **Contracts** — all reads/writes go through the Morpho Blue singleton at `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb` (deterministic CREATE2 on every supported chain). `idToMarketParams(id)` resolves the URL market id to on-chain params; `supply(params, assets, 0, onBehalf, "0x")` handles the deposit; `position(id, user)` + `market(id)` feed balance math.
-- **Wallet bridge** — a `world: "MAIN"` content script implements EIP-6963 discovery (plus legacy `window.ethereum` fallback) and proxies EIP-1193 requests via `window.postMessage` to the isolated content script. The UI builds a viem `WalletClient` on top and never holds keys.
+- **Wallet mediation** — wallet requests travel from the isolated content script to the extension service worker. The worker validates the sender and RPC method, then performs one scoped EIP-6963 / `window.ethereum` request in `MAIN` world. Page scripts cannot invoke the wallet path through `window.postMessage`; the extension never holds keys.
 - **Data** — lightweight GraphQL against `https://blue-api.morpho.org/graphql` for APY and USD. Shares-to-assets math is also ported locally in `sharesMath.ts` for direct on-chain reads.
-- **UI** — React 19 mounted inside a Shadow DOM so the extension's styles don't leak into (or out of) Morpho's page. SPA navigation is caught by patching `history.pushState` / `replaceState` and a throttled `MutationObserver` that ignores animation-driven churn.
+- **UI** — React 19 uses a Shadow DOM for standalone dashboard widgets; the market Lend form intentionally mounts in light DOM so it can inherit Morpho's native Borrow tokens and utility classes. SPA navigation is caught by patching `history.pushState` / `replaceState` and a throttled `MutationObserver` that ignores animation-driven churn.
 
 ## Supported chains
 
@@ -112,11 +112,15 @@ Iterate with `pnpm dev` (Vite + crxjs HMR).
 ## Tests
 
 ```bash
+# Complete release gate: logic, build, all live probes, extension E2E,
+# screenshots, and the Chrome Web Store ZIP.
+pnpm test:release
+
 # DOM probe against the live site (captures anchors + sample layout JSON)
 pnpm probe
 
 # End-to-end — launches Chromium with the built extension. Covers: Lend tab,
-# dashboard mount, dark-mode legibility, provider bridge, favorites star + filter,
+# dashboard mount, dark-mode legibility, wallet isolation, favorites star + filter,
 # and the toolbar popup (tabs, sort, V1/V2 vault rendering, chrome.storage cache).
 pnpm test:e2e
 ```
@@ -131,22 +135,23 @@ pnpm exec playwright test tests/e2e/screenshots.spec.ts
 
 ```
 src/
+├── background.ts             # Sender-validated, allow-listed wallet RPC service
 ├── manifest.config.ts        # MV3 manifest declaration
 ├── content/
 │   ├── main.ts               # ISOLATED world — SPA route watcher + mount dispatcher
 │   ├── mount.ts              # Shadow DOM host + React root + theme sync
 │   ├── router.ts             # pushState/replaceState → locationchange event
 │   ├── marketIntegration.ts  # Borrow | Lend tab injection on the market panel
-│   └── listsIntegration.ts   # Favorites star + filter chip on /markets and /vaults
+│   └── listsIntegration.ts   # Favorites star + filter chip on /variable and /vaults
 ├── lib/
 │   ├── morpho.ts             # viem public client + Morpho contract helpers
 │   ├── morphoAbi.ts          # IMorpho + ERC20 + WETH9 ABIs
 │   ├── sharesMath.ts         # SharesMathLib port (virtual shares/assets)
 │   ├── chains.ts             # Slug ↔ chain ID, wrapped-native, RPC fallback list
 │   ├── url.ts                # Route matcher (market / dashboard / list / other)
-│   ├── favorites.ts          # chrome.storage.local-backed favorites + cross-tab sync + E2E bridge
+│   ├── favorites.ts          # chrome.storage.local-backed favorites + cross-tab sync
 │   ├── graphql.ts            # blue-api client (markets, V1/V2 vaults, batch + SWR cache)
-│   └── pageProvider.ts       # Bridge client + viem WalletClient adapter
+│   └── pageProvider.ts       # Service-worker RPC client + viem WalletClient adapter
 ├── ui/
 │   ├── MarketLendForm.tsx    # Market-page supply / withdraw form (with wrap toggle)
 │   ├── DashboardSupplyCard.tsx
@@ -163,17 +168,15 @@ src/
 │   └── curatedMarkets.ts     # Prime-tier watch list (19 markets, hand-maintained)
 public/
 ├── icons/                    # Generated by scripts/make-logo.py (16/32/48/128)
-├── logo.svg                  # Master vector (Morpho butterfly + enhancement badge)
-└── injected/
-    └── provider-bridge.js    # Plain-JS MAIN-world bridge (not bundled with app code)
+└── logo.svg                  # Master vector (Morpho butterfly + enhancement badge)
 scripts/
 ├── make-logo.py              # Regenerates extension icons from morpho-base.svg
 └── morpho-base.svg           # Official Morpho butterfly (source)
 tests/
 ├── probe/                    # DOM scrapes against app.morpho.org
 └── e2e/
-    ├── extension.spec.ts     # Lend tab, dashboard mount, dark mode, provider bridge
-    ├── favorites.spec.ts     # Star + filter + persistence (uses postMessage test bridge)
+    ├── extension.spec.ts     # Lend tab, dashboard mount, dark mode, wallet isolation
+    ├── favorites.spec.ts     # Star + filter + persistence through extension storage
     ├── popup.spec.ts         # Toolbar popup — tabs, sort, V1/V2 vault, cache, refresh
     └── screenshots.spec.ts   # README / store-listing screenshots (mocked data)
 ```
@@ -181,14 +184,14 @@ tests/
 ## Security
 
 - Reads contract state via public RPC endpoints (viem fallback across 4 providers per chain). Writes go through the user's wallet — the extension never holds or requests private keys.
-- All writes are simulated via `simulateContract` before `writeContract`, so reverts surface as readable errors before the wallet prompt.
+- Morpho, approval, and unwrap writes are simulated before the wallet prompt; native wrapping is submitted directly and every receipt is checked for success before the next step.
 - Full-withdraw uses shares (not assets) to avoid precision reverts on interest accrual; partial withdraw uses assets within a 0.01% tolerance.
-- Host permissions limited to `https://app.morpho.org/*`. The only Chrome API used is `chrome.storage.local` (for favorites and the popup data cache); no data is sent to any service other than the user-configured RPCs, `blue-api.morpho.org`, and Morpho's CDN (`cdn.morpho.org`) for token logos.
+- Host permissions are limited to `https://app.morpho.org/*`. Chrome `storage` keeps favorites/cache locally; `scripting` executes only sender-validated, allow-listed wallet RPC calls in MAIN world. No data is sent anywhere except the configured RPCs, `blue-api.morpho.org`, and Morpho's token-logo CDN.
 
 ## Known limitations
 
 - **One-tx wrap-and-supply** isn't implemented yet. Morpho's Bundler / GeneralAdapter could fold wrap + approve + supply into a single multicall; this extension does them as 2–3 separate signatures. Works, just more clicks.
-- **WalletConnect-only sessions** that don't expose an injected EIP-1193 provider on the page won't be picked up by the bridge.
+- **WalletConnect-only sessions** that don't expose an injected EIP-1193 provider on the page cannot be used by the extension.
 - **Bundle size** is ~530 KB pre-gzip, dominated by viem. A later release will dynamic-import viem's chain / contract code paths.
 
 ## Publishing

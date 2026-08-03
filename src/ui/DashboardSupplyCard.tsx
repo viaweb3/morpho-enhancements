@@ -32,7 +32,7 @@ const HEADER_ROW_STYLE: React.CSSProperties = {
 
 // Matches the "Vaults" / "Markets" headline size on Morpho's dashboard.
 const TITLE_STYLE: React.CSSProperties = {
-  fontSize: 44,
+  fontSize: 'clamp(30px, 5vw, 44px)',
   fontWeight: 500,
   lineHeight: 1.05,
   letterSpacing: '-0.02em',
@@ -50,7 +50,7 @@ const SUBTITLE_STYLE: React.CSSProperties = {
 // label+value on the left and stat panel on the right, divided by a hairline.
 const HERO_CARD_STYLE: React.CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: 'minmax(0, 1fr) 342px',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
   minHeight: 155,
   background: 'var(--mx-surface)',
   border: '1px solid var(--mx-border)',
@@ -269,13 +269,17 @@ function PositionRow({ p }: { p: Row }) {
   const loan = p.market.loanAsset;
   const coll = p.market.collateralAsset;
   const chainId = p.market.morphoBlue?.chain.id ?? 1;
-  const chainSlug = slugFromChainId(chainId) ?? 'ethereum';
-  const marketUrl = `/${chainSlug}/market/${p.market.uniqueKey}/${(coll?.symbol ?? 'idle').toLowerCase()}-${loan.symbol.toLowerCase()}`;
+  const chainSlug = slugFromChainId(chainId);
+  const marketUrl = chainSlug
+    ? `/${chainSlug}/variable/${p.market.uniqueKey}/${(coll?.symbol ?? 'idle').toLowerCase()}-${loan.symbol.toLowerCase()}`
+    : null;
   const supplied = BigInt(p.supplyAssets);
   return (
     <div
       style={{ ...CARD_STYLE, cursor: 'pointer' }}
-      onClick={() => (window.location.href = marketUrl)}
+      onClick={() => {
+        if (marketUrl) window.location.href = marketUrl;
+      }}
     >
       <div style={CARD_HEADER}>
         <div style={TOKEN_PAIR}>

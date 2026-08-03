@@ -18,12 +18,13 @@ import { formatAmount, formatPercent, formatUsd, tryParseUnits } from './format'
 import { humanizeError } from './errorMessage';
 import {
   getPageProvider,
+  assertWalletContext,
   makeWalletClientFromPage,
   requestAccount,
 } from '@/lib/pageProvider';
 import { toAssetsDown } from '@/lib/sharesMath';
 import type { Address, Hex } from 'viem';
-import { maxUint256 } from 'viem';
+import { formatUnits } from 'viem';
 
 type Props = {
   chainSlug: SupportedChainSlug;
@@ -59,11 +60,14 @@ export function MarketLendForm({ chainSlug, marketId }: Props) {
   const [account, setAccount] = useState<Address | null>(null);
   const [balance, setBalance] = useState<bigint | null>(null);
   const [ethBalance, setEthBalance] = useState<bigint | null>(null);
+  const [gasReserve, setGasReserve] = useState<bigint>(0n);
   const [allowance, setAllowance] = useState<bigint | null>(null);
   const [supplyShares, setSupplyShares] = useState<bigint | null>(null);
   const [marketState, setMarketState] = useState<MarketState | null>(null);
   const [amount, setAmount] = useState('');
+  const [inputFocused, setInputFocused] = useState(false);
   const [phase, setPhase] = useState<Phase>({ name: 'idle' });
+  const [dataError, setDataError] = useState<string | null>(null);
 
   // Resolve market params + metadata
   useEffect(() => {
@@ -121,19 +125,26 @@ export function MarketLendForm({ chainSlug, marketId }: Props) {
     if (!account || !params) return;
     let cancelled = false;
     (async () => {
-      const [bal, all, pos, market, eth] = await Promise.all([
-        morpho.erc20Balance(params.loanToken, account),
-        morpho.erc20Allowance(params.loanToken, account, MORPHO_BLUE_ADDRESS),
-        morpho.position(marketId, account),
-        morpho.marketState(marketId),
-        loanIsWrappedNative ? morpho.nativeBalance(account) : Promise.resolve(null),
-      ]);
-      if (cancelled) return;
-      setBalance(bal);
-      setAllowance(all);
-      setSupplyShares(pos.supplyShares);
-      setMarketState(market);
-      setEthBalance(eth);
+      try {
+        const [bal, all, pos, market, eth, reserve] = await Promise.all([
+          morpho.erc20Balance(params.loanToken, account),
+          morpho.erc20Allowance(params.loanToken, account, MORPHO_BLUE_ADDRESS),
+          morpho.position(marketId, account),
+          morpho.marketState(marketId),
+          loanIsWrappedNative ? morpho.nativeBalance(account) : Promise.resolve(null),
+          loanIsWrappedNative ? morpho.nativeGasReserve().catch(() => 200_000_000_000_000n) : 0n,
+        ]);
+        if (cancelled) return;
+        setBalance(bal);
+        setAllowance(all);
+        setSupplyShares(pos.supplyShares);
+        setMarketState(market);
+        setEthBalance(eth);
+        setGasReserve(reserve);
+        setDataError(null);
+      } catch (error) {
+        if (!cancelled) setDataError(humanizeError(error).message);
+      }
     })();
     return () => {
       cancelled = true;
@@ -219,8 +230,7 @@ export function MarketLendForm({ chainSlug, marketId }: Props) {
       // gas doesn't push the user into insufficient-funds territory.
       if (useNative) {
         if (balance === null || ethBalance === null) return;
-        const GAS_RESERVE = 2_000_000_000_000_000n; // 0.002 ETH
-        const ethSpendable = ethBalance > GAS_RESERVE ? ethBalance - GAS_RESERVE : 0n;
+        const ethSpendable = ethBalance > gasReserve ? ethBalance - gasReserve : 0n;
         const total = balance + ethSpendable;
         setAmount(formatAmount(total, loanMeta.decimals, loanMeta.decimals));
         return;
@@ -237,10 +247,11 @@ export function MarketLendForm({ chainSlug, marketId }: Props) {
     if (!account || !chain || wrapAmount <= 0n) return;
     try {
       setPhase({ name: 'wrapping' });
+      await assertWalletContext(chainId, account);
       const wallet = makeWalletClientFromPage(chain, account);
       const txHash = await morpho.wrapEth(wallet, WRAPPED_NATIVE_ADDRESS[chainSlug], wrapAmount, account);
       setPhase({ name: 'wrapping', txHash });
-      await morpho.publicClient.waitForTransactionReceipt({ hash: txHash });
+      await morpho.waitForSuccessfulTransaction(txHash);
       setPhase({ name: 'idle' });
     } catch (err) {
       handleError(err);
@@ -251,16 +262,28 @@ export function MarketLendForm({ chainSlug, marketId }: Props) {
     if (!params || !account || !chain || !parsedAmount) return;
     try {
       setPhase({ name: 'approving' });
+      await assertWalletContext(chainId, account);
       const wallet = makeWalletClientFromPage(chain, account);
+      if ((allowance ?? 0n) > 0n) {
+        const resetHash = await morpho.approve(
+          wallet,
+          params.loanToken,
+          MORPHO_BLUE_ADDRESS,
+          0n,
+          account,
+        );
+        setPhase({ name: 'approving', txHash: resetHash });
+        await morpho.waitForSuccessfulTransaction(resetHash);
+      }
       const txHash = await morpho.approve(
         wallet,
         params.loanToken,
         MORPHO_BLUE_ADDRESS,
-        maxUint256,
+        parsedAmount,
         account,
       );
       setPhase({ name: 'approving', txHash });
-      await morpho.publicClient.waitForTransactionReceipt({ hash: txHash });
+      await morpho.waitForSuccessfulTransaction(txHash);
       setPhase({ name: 'idle' });
     } catch (err) {
       handleError(err);
@@ -271,10 +294,11 @@ export function MarketLendForm({ chainSlug, marketId }: Props) {
     if (!params || !account || !chain || !parsedAmount) return;
     try {
       setPhase({ name: 'supplying' });
+      await assertWalletContext(chainId, account);
       const wallet = makeWalletClientFromPage(chain, account);
       const txHash = await morpho.supply(wallet, params, parsedAmount, account);
       setPhase({ name: 'supplying', txHash });
-      await morpho.publicClient.waitForTransactionReceipt({ hash: txHash });
+      await morpho.waitForSuccessfulTransaction(txHash);
       setPhase({ name: 'success', txHash });
       setAmount('');
     } catch (err) {
@@ -287,6 +311,7 @@ export function MarketLendForm({ chainSlug, marketId }: Props) {
     if (suppliedAssets === null || supplyShares === null) return;
     try {
       setPhase({ name: 'withdrawing' });
+      await assertWalletContext(chainId, account);
       const wallet = makeWalletClientFromPage(chain, account);
       // Full withdraw: pass shares to avoid precision reverts.
       // Partial: pass assets. We consider "full" when user's amount equals
@@ -300,7 +325,7 @@ export function MarketLendForm({ chainSlug, marketId }: Props) {
         ? await morpho.withdrawBySharesFull(wallet, params, supplyShares, account, account)
         : await morpho.withdrawByAssets(wallet, params, parsedAmount, account, account);
       setPhase({ name: 'withdrawing', txHash });
-      await morpho.publicClient.waitForTransactionReceipt({ hash: txHash });
+      await morpho.waitForSuccessfulTransaction(txHash);
       // When receiving-as-ETH, unwrap only the delta we just pulled in so we
       // don't touch WETH the user already held.
       if (useNative) {
@@ -315,7 +340,7 @@ export function MarketLendForm({ chainSlug, marketId }: Props) {
             account,
           );
           setPhase({ name: 'unwrapping', txHash: unwrapTx });
-          await morpho.publicClient.waitForTransactionReceipt({ hash: unwrapTx });
+          await morpho.waitForSuccessfulTransaction(unwrapTx);
           setPhase({ name: 'success', txHash: unwrapTx });
           setAmount('');
           return;
@@ -360,18 +385,34 @@ export function MarketLendForm({ chainSlug, marketId }: Props) {
 
   const primaryDisabled =
     busy ||
-    !parsedAmount ||
     (account !== null &&
-      ((mode === 'deposit' && insufficientBalance) ||
+      (!parsedAmount ||
+        (mode === 'deposit' && insufficientBalance) ||
         (mode === 'withdraw' && insufficientSupply)));
 
   const loanLogo = symbol
     ? `https://cdn.morpho.org/assets/logos/${symbol.toLowerCase()}.svg`
     : '';
+  const collateralLogo = collMeta?.symbol
+    ? `https://cdn.morpho.org/assets/logos/${collMeta.symbol.toLowerCase()}.svg`
+    : '';
+  const inputUsd = useMemo(() => {
+    if (!parsedAmount || !loanMeta || !apiMarket?.state) return null;
+    try {
+      const totalAssets = Number(formatUnits(BigInt(apiMarket.state.supplyAssets), loanMeta.decimals));
+      if (!Number.isFinite(totalAssets) || totalAssets <= 0) return null;
+      const priceUsd = apiMarket.state.supplyAssetsUsd / totalAssets;
+      const entered = Number(formatUnits(parsedAmount, loanMeta.decimals));
+      const value = entered * priceUsd;
+      return Number.isFinite(value) ? value : null;
+    } catch {
+      return null;
+    }
+  }, [parsedAmount, loanMeta, apiMarket]);
 
   return (
     <>
-      {/* Deposit / Withdraw sub-tabs */}
+      {/* Match Morpho's compact secondary segmented control. */}
       <div style={SUBTABS_STYLE}>
         <button
           type="button"
@@ -382,7 +423,7 @@ export function MarketLendForm({ chainSlug, marketId }: Props) {
           aria-selected={mode === 'deposit'}
           style={{ ...SUBTAB_STYLE, ...(mode === 'deposit' ? SUBTAB_ACTIVE_STYLE : {}) }}
         >
-          Deposit
+          Supply
         </button>
         <button
           type="button"
@@ -397,14 +438,22 @@ export function MarketLendForm({ chainSlug, marketId }: Props) {
         </button>
       </div>
 
-      {/* Input card — matches Morpho's asset input card */}
-      <div className="stack flex flex-col gap-[9px]">
-        <div
-          className="gap-s p-m shadow-card flex flex-col rounded-lg bg-bg-card outline-border-interactive-active outline-1 cursor-text hover:bg-bg-card"
+      {/* Same three-row anatomy and density as Morpho's native asset input. */}
+      <div className="flex flex-col gap-[2px]">
+        <div className="flex flex-col gap-[9px]">
+          <div
+          data-morpho-ext-input-card=""
+          className="gap-sm p-md shadow-md dark:shadow-none flex flex-col rounded-[20px] bg-card cursor-text hover:bg-card"
+          style={{
+            outline: inputFocused
+              ? '1px solid var(--mx-ring)'
+              : '0.5px solid var(--mx-border)',
+            outlineOffset: -1,
+          }}
           onClick={(e) => (e.currentTarget.querySelector('input') as HTMLInputElement | null)?.focus()}
         >
           <div className="gap-s flex flex-row items-center justify-between">
-            <span className="typo-body-xs text-text-secondary max-w-[170px] truncate">
+            <span className="text-secondary-foreground max-w-[170px] truncate text-xs">
               {mode === 'deposit' ? 'Supply' : 'Withdraw'} {displaySymbol}
             </span>
             <div className="flex items-center gap-[6px]">
@@ -444,7 +493,10 @@ export function MarketLendForm({ chainSlug, marketId }: Props) {
               )}
               {loanLogo && (
                 <div className="flex gap-[2px]">
-                  <div className="relative inline-flex aspect-square shrink-0 items-center justify-center size-m p-[2px]">
+                  <div
+                    className="relative inline-flex shrink-0 items-center justify-center p-[2px]"
+                    style={{ width: 20, height: 20 }}
+                  >
                     <img
                       alt={displaySymbol}
                       src={
@@ -470,16 +522,18 @@ export function MarketLendForm({ chainSlug, marketId }: Props) {
               lang="en-US"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => setInputFocused(false)}
               disabled={busy}
-              className="typo-body-xl text-text-primary h-[33px] w-full border-none bg-transparent p-0 outline-none caret-constant-brand input-no-spinner truncate placeholder:text-text-interactive-disabled disabled:cursor-not-allowed"
+              className="text-xl text-foreground h-[33px] w-full border-none bg-transparent p-0 outline-none caret-primary input-no-spinner truncate placeholder:text-muted-foreground disabled:cursor-not-allowed"
             />
           </div>
           <div className="gap-s flex min-h-[26px] w-full flex-row items-center justify-between">
-            <span className="typo-body-3xs h-[18px] truncate leading-none break-all text-text-secondary">
-              $0
+            <span className="text-3xs h-[18px] truncate leading-none break-all text-secondary-foreground">
+              {inputUsd === null ? '$0' : formatUsd(inputUsd)}
             </span>
             <div className="gap-xs flex flex-row items-center">
-              <span className="typo-body-3xs text-text-secondary max-w-[220px] truncate whitespace-nowrap">
+              <span className="text-3xs text-secondary-foreground max-w-[140px] truncate whitespace-nowrap">
                 {mode === 'deposit'
                   ? walletDisplay({
                       loanMeta,
@@ -490,8 +544,8 @@ export function MarketLendForm({ chainSlug, marketId }: Props) {
                       nativeSymbol,
                     })
                   : suppliedAssets !== null && loanMeta
-                  ? `Supplied: ${formatAmount(suppliedAssets, loanMeta.decimals, 4)} ${symbol}`
-                  : `Supplied: — ${symbol}`}
+                  ? `${formatAmount(suppliedAssets, loanMeta.decimals, 4)} ${symbol}`
+                  : `— ${symbol}`}
               </span>
               <button
                 type="button"
@@ -502,19 +556,24 @@ export function MarketLendForm({ chainSlug, marketId }: Props) {
                     ? !(depositBalance && depositBalance > 0n)
                     : suppliedAssets === null || suppliedAssets === 0n)
                 }
-                className="inline-flex shrink-0 items-center justify-center text-center select-none disabled:opacity-100 bg-bg-primary text-text-body hover:bg-bg-interactive-hover active:bg-bg-interactive-selected disabled:bg-bg-interactive-disabled disabled:text-text-interactive-disabled disabled:cursor-not-allowed typo-body-3xs h-[26px] rounded-xs cursor-pointer px-[10px]"
+                className="inline-flex items-center cursor-pointer disabled:cursor-not-allowed justify-center whitespace-nowrap rounded-lg active:scale-98 disabled:opacity-50 shrink-0 outline-none border-[0.5px] border-border bg-popover text-foreground shadow-sm hover:bg-accent active:bg-accent disabled:border-transparent disabled:shadow-none gap-1 px-3 text-2xs leading-none h-[26px]"
               >
                 <span className="truncate leading-none text-inherit">MAX</span>
               </button>
             </div>
           </div>
+          </div>
         </div>
       </div>
 
-      {/* Market details */}
-      <div className="stack flex flex-col gap-[6px] py-[6px]">
-        <Row label="Loan asset" value={symbol} />
-        <Row label="Collateral asset" value={collMeta?.symbol ?? '—'} />
+      {/* Native-style summary card. */}
+      <div
+        data-morpho-ext-summary-card=""
+        className="bg-card shadow-md dark:shadow-none flex rounded-[20px] p-md border-[0.5px] border-border gap-sm flex-col justify-between"
+        style={{ borderColor: 'var(--mx-border)' }}
+      >
+        <Row label="Loan asset" value={symbol} logo={loanLogo} />
+        <Row label="Collateral asset" value={collMeta?.symbol ?? '—'} logo={collateralLogo} />
         <Row label="Supply APY" value={formatPercent(apiMarket?.state?.supplyApy)} />
         <Row
           label="Market utilization"
@@ -526,13 +585,16 @@ export function MarketLendForm({ chainSlug, marketId }: Props) {
         />
       </div>
 
-      <div className="stack flex flex-col">
+      <div className="gap-xs pb-sm flex flex-col items-stretch justify-start">
         <ActionButton onClick={primaryAction()} disabled={primaryDisabled}>
           {primaryLabel()}
         </ActionButton>
 
         {phase.name === 'error' && (
           <div style={ERROR_STYLE}>{phase.message}</div>
+        )}
+        {dataError && phase.name !== 'error' && (
+          <div style={ERROR_STYLE}>Live wallet data unavailable: {dataError}</div>
         )}
         {phase.name === 'success' && (
           <div style={SUCCESS_STYLE}>
@@ -548,9 +610,9 @@ export function MarketLendForm({ chainSlug, marketId }: Props) {
 
 const SUBTABS_STYLE: React.CSSProperties = {
   display: 'inline-flex',
-  padding: 3,
+  padding: 2,
   gap: 2,
-  background: 'var(--mx-surface)',
+  background: 'var(--mx-control-bg)',
   borderRadius: 10,
   alignSelf: 'flex-start',
 };
@@ -560,27 +622,29 @@ const SUBTAB_STYLE: React.CSSProperties = {
   border: 'none',
   background: 'transparent',
   color: 'var(--mx-fg-muted)',
-  fontSize: 13,
-  fontWeight: 500,
-  padding: '6px 14px',
+  height: 28,
+  fontSize: 12,
+  fontWeight: 400,
+  lineHeight: 1,
+  padding: '0 12px',
   borderRadius: 8,
   cursor: 'pointer',
   transition: 'background-color 120ms ease, color 120ms ease',
 };
 
 const SUBTAB_ACTIVE_STYLE: React.CSSProperties = {
-  background: 'rgba(41, 115, 255, 0.95)',
-  color: '#fff',
-  fontWeight: 600,
+  background: 'var(--mx-control-active)',
+  color: 'var(--mx-fg)',
+  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.08)',
 };
 
 const PAY_TOGGLE_STYLE: React.CSSProperties = {
   display: 'inline-flex',
   padding: 2,
   gap: 2,
-  background: 'var(--mx-surface-subtle)',
-  borderRadius: 6,
-  border: '1px solid var(--mx-border)',
+  background: 'var(--mx-control-bg)',
+  borderRadius: 8,
+  border: '0.5px solid var(--mx-border)',
 };
 
 const PAY_TOGGLE_BTN: React.CSSProperties = {
@@ -589,15 +653,16 @@ const PAY_TOGGLE_BTN: React.CSSProperties = {
   background: 'transparent',
   color: 'var(--mx-fg-muted)',
   fontSize: 11,
-  fontWeight: 500,
-  padding: '2px 8px',
-  borderRadius: 4,
+  fontWeight: 400,
+  height: 22,
+  padding: '0 7px',
+  borderRadius: 6,
   cursor: 'pointer',
   letterSpacing: '0.02em',
 };
 
 const PAY_TOGGLE_ACTIVE: React.CSSProperties = {
-  background: 'var(--mx-surface)',
+  background: 'var(--mx-control-active)',
   color: 'var(--mx-fg)',
   boxShadow: '0 0 0 1px var(--mx-border)',
 };
@@ -617,17 +682,17 @@ function walletDisplay({
   wrappedSymbol: string;
   nativeSymbol: string;
 }): string {
-  if (!loanMeta) return `Wallet: — ${wrappedSymbol}`;
+  if (!loanMeta) return `— ${wrappedSymbol}`;
   if (combined) {
     const nat = nativeBal ?? 0n;
     const wrapped = wrappedBal ?? 0n;
     if (wrapped > 0n) {
-      return `Wallet: ${formatAmount(nat, loanMeta.decimals, 4)} ${nativeSymbol} + ${formatAmount(wrapped, loanMeta.decimals, 4)} ${wrappedSymbol}`;
+      return `${formatAmount(nat, loanMeta.decimals, 4)} ${nativeSymbol} + ${formatAmount(wrapped, loanMeta.decimals, 4)} ${wrappedSymbol}`;
     }
-    return `Wallet: ${formatAmount(nat, loanMeta.decimals, 4)} ${nativeSymbol}`;
+    return `${formatAmount(nat, loanMeta.decimals, 4)} ${nativeSymbol}`;
   }
-  if (wrappedBal === null) return `Wallet: — ${wrappedSymbol}`;
-  return `Wallet: ${formatAmount(wrappedBal, loanMeta.decimals, 4)} ${wrappedSymbol}`;
+  if (wrappedBal === null) return `— ${wrappedSymbol}`;
+  return `${formatAmount(wrappedBal, loanMeta.decimals, 4)} ${wrappedSymbol}`;
 }
 
 const ERROR_STYLE: React.CSSProperties = {
@@ -649,20 +714,24 @@ const SUCCESS_STYLE: React.CSSProperties = {
   borderRadius: 8,
 };
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value, logo }: { label: string; value: string; logo?: string }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        fontSize: 13,
-        lineHeight: 1.4,
-        padding: '2px 0',
-      }}
-    >
-      <span style={{ color: 'var(--mx-fg-muted)' }}>{label}</span>
-      <span style={{ color: 'var(--mx-fg)', fontWeight: 500 }}>{value}</span>
+    <div className="flex min-h-5 items-center justify-between text-3xs leading-none">
+      <span className="text-secondary-foreground">{label}</span>
+      <span className="flex items-center gap-[6px] text-foreground">
+        {logo && value !== '—' && (
+          <img
+            alt=""
+            aria-hidden="true"
+            src={logo}
+            className="size-5 shrink-0 object-contain p-[2px]"
+            onError={(event) => {
+              event.currentTarget.style.display = 'none';
+            }}
+          />
+        )}
+        <span>{value}</span>
+      </span>
     </div>
   );
 }
@@ -673,15 +742,15 @@ function ActionButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
     width: '100%',
     height: 48,
     padding: '0 20px',
-    borderRadius: 10,
+    borderRadius: 8,
     border: 'none',
     cursor: disabled ? 'not-allowed' : 'pointer',
     fontSize: 14,
-    fontWeight: 500,
+    fontWeight: 400,
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: disabled ? 'var(--mx-disabled-bg)' : 'rgba(41, 115, 255, 0.95)',
+    background: disabled ? 'var(--mx-disabled-bg)' : 'var(--mx-primary)',
     color: disabled ? 'var(--mx-fg-disabled)' : '#ffffff',
     transition: 'background-color 120ms ease, opacity 120ms ease',
   };

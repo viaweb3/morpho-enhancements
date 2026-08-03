@@ -1,4 +1,4 @@
-// Favorites store for /vaults and /markets list rows.
+// Favorites store for /vaults and /variable list rows.
 //
 // Storage: chrome.storage.local — shared across the content script
 // (running on app.morpho.org) and the popup (running on the extension
@@ -32,15 +32,18 @@ export interface ParsedFavoriteKey {
 export function parseFavoriteKey(key: FavoriteKey): ParsedFavoriteKey | null {
   const m = key.match(/^(market|vault):([^:]+):(0x[a-fA-F0-9]+)$/);
   if (!m) return null;
+  const expectedLength = m[1] === 'market' ? 66 : 42;
+  if (m[3].length !== expectedLength) return null;
   return { kind: m[1] as FavoriteKind, chainSlug: m[2], id: m[3] };
 }
 
-// Parses a list-row href like `/base/market/0xabc.../slug` or
+// Parses a list-row href like `/base/variable/0xabc.../slug` or
 // `/ethereum/vault/0xabc.../slug` into a normalized favorite key.
 export function parseHrefToKey(href: string): FavoriteKey | null {
-  const m = href.match(/^\/([^/]+)\/(market|vault)\/(0x[a-fA-F0-9]+)(?:\/|$)/);
+  const m = href.match(/^\/([^/]+)\/(variable|vault)\/(0x[a-fA-F0-9]+)(?:\/|$)/);
   if (!m) return null;
-  return favoriteKey(m[2] as FavoriteKind, m[1], m[3]);
+  const key = favoriteKey(m[2] === 'vault' ? 'vault' : 'market', m[1], m[3]);
+  return parseFavoriteKey(key) ? key : null;
 }
 
 let cache: ReadonlySet<string> = new Set();
@@ -166,45 +169,5 @@ if (hasChromeStorage() && typeof chrome.storage.onChanged !== 'undefined') {
     );
     cache = next;
     notify();
-  });
-}
-
-// Page-context bridge for E2E tests. The page's main world cannot reach
-// chrome.storage directly; this relays a tiny set of commands so the
-// Playwright runner can seed and assert state. Production users gain
-// nothing they could not already do through the UI.
-if (typeof window !== 'undefined') {
-  window.addEventListener('message', (e: MessageEvent) => {
-    if (e.source !== window) return;
-    const msg = e.data as { type?: string } | null;
-    if (!msg || typeof msg !== 'object') return;
-    if (msg.type === 'morpho-ext-test:clear-favorites') {
-      cache = new Set();
-      notify();
-      void persist(cache).then(() => {
-        window.postMessage({ type: 'morpho-ext-test:cleared' }, '*');
-      });
-    } else if (msg.type === 'morpho-ext-test:set-favorites') {
-      const incoming = (msg as { keys?: unknown }).keys;
-      const next = new Set<string>(
-        Array.isArray(incoming) ? (incoming.filter((k) => typeof k === 'string') as string[]) : [],
-      );
-      cache = next;
-      notify();
-      void persist(next).then(() => {
-        window.postMessage({ type: 'morpho-ext-test:seeded' }, '*');
-      });
-    } else if (msg.type === 'morpho-ext-test:get-favorites') {
-      window.postMessage(
-        { type: 'morpho-ext-test:favorites', keys: [...cache] },
-        '*',
-      );
-    } else if (msg.type === 'morpho-ext-test:get-extension-id') {
-      // Lets the E2E runner construct the popup URL
-      // (chrome-extension://[id]/src/popup/index.html).
-      const id =
-        typeof chrome !== 'undefined' && chrome.runtime ? chrome.runtime.id : '';
-      window.postMessage({ type: 'morpho-ext-test:extension-id', id }, '*');
-    }
   });
 }

@@ -17,6 +17,10 @@ export default defineManifest({
     default_title: 'Morpho Enhancements',
     default_popup: 'src/popup/index.html',
   },
+  background: {
+    service_worker: 'src/background.ts',
+    type: 'module',
+  },
   content_scripts: [
     {
       matches: ['https://app.morpho.org/*'],
@@ -24,16 +28,11 @@ export default defineManifest({
       run_at: 'document_idle',
       all_frames: false,
     },
-    // Second content_script (MAIN world, provider bridge) is appended
-    // post-build by the mainWorldBridge() Vite plugin — it's copied from
-    // public/injected/provider-bridge.js as a static asset, which crxjs
-    // would otherwise wrap with a chrome.runtime.getURL loader that fails
-    // in MAIN world (no chrome.* API there).
   ],
   // chrome.storage.local backs the favorites store — chosen over
   // window.localStorage so the toolbar popup (extension origin) can read
   // the same data that the content script (app.morpho.org origin) writes.
-  permissions: ['storage'],
+  permissions: ['storage', 'scripting'],
   // `blue-api.morpho.org` is NOT listed here: content scripts can fetch()
   // HTTPS URLs for CORS-enabled endpoints without a host permission, and
   // Morpho's API sends permissive CORS headers. Keeping the permission list

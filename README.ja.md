@@ -8,7 +8,7 @@
 
 2. **Dashboard での可視化** — 公式 dashboard は vault 預け入れと借入ポジションしか表示しないため、マーケットへの直接貸付が見えません。本拡張は **Market Lending** カードを追加し、Morpho がサポートする全チェーンでのユーザーの直接貸付を USD 金額・APY・マーケットへのショートカット付きで表示します。
 
-3. **`/markets` と `/vaults` のお気に入り** — 行頭のスターで任意のマーケット/vault をブックマークし、左下の **Favorites only** チップで気になる数件だけに絞り込めます。ブラウザ内に保存され、タブ間で同期します。
+3. **`/variable` と `/vaults` のお気に入り** — 行頭のスターで任意のマーケット/vault をブックマークし、左下の **Favorites only** チップで気になる数件だけに絞り込めます。ブラウザ内に保存され、タブ間で同期します。
 
 4. **ツールバー popup クイックビュー** — 拡張アイコンをクリックするだけで:*Prime* タブには Mainnet / Base / Arbitrum / OP の厳選 19 ブルーチップ・マーケットを supply APY、TVL、利用率、LLTV つきで表示。*Favorites* タブにはスター済みのマーケットと vault(V1 / V2 MetaMorpho 両対応)。APY または TVL でソート可能、行クリックで app.morpho.org の該当ページへ。
 
@@ -49,8 +49,8 @@
 
 - **Borrow | Lend タブ** — マーケットパネルに Lend タブを追加。ライト/ダーク両モードで Morpho のビジュアルに揃った Supply / Withdraw UI に切り替わります。
 - **ETH / WETH 自動ラップ** — ローン資産がそのチェーンの wrapped-native(Polygon の POL、Monad の MON、HyperEVM の HYPE など)の場合、ネイティブ通貨で支払えるトグルが出ます。Supply 前に自動 wrap、Withdraw 後に自動 unwrap。署名は合計 2 回のみで、wrap 用の別 UX 遷移はありません。
-- **マルチチェーン Dashboard** — Market Lending カードは Morpho がサポートするすべてのチェーンを 1 リクエストで取得します。対応チェーンの実体リストは [src/services/chain/morphoSupportedChains.ts](src/services/chain/morphoSupportedChains.ts) に集約されています。
-- **リストページのお気に入り** — `/markets` と `/vaults` の行にスターを付け、ワンクリックで絞り込み。保存先は `chrome.storage.local` のみ(サーバー・トラッキングなし)、`chrome.storage.onChanged` でタブ間および popup と同期。
+- **マルチチェーン Dashboard** — Market Lending カードは Morpho がサポートするすべてのチェーンを 1 リクエストで取得します。対応チェーンの実体リストは [src/lib/chains.ts](src/lib/chains.ts) に集約されています。
+- **リストページのお気に入り** — `/variable` と `/vaults` の行にスターを付け、ワンクリックで絞り込み。保存先は `chrome.storage.local` のみ(サーバー・トラッキングなし)、`chrome.storage.onChanged` でタブ間および popup と同期。
 - **ツールバー popup の 2 タブ** — *Prime*(Mainnet / Base / Arbitrum / OP の厳選 19 ブルーチップ・マーケット)と *Favorites*(お気に入りのマーケットと vault、V1 / V2 MetaMorpho 両対応、行内に `V1`/`V2` の小さなチップ)。Stale-while-revalidate キャッシュ:5 分間のメモリ + `chrome.storage.local` 永続化により、popup を再オープンしても前回の値が即座に表示され、バックグラウンドで最新値に差し替え。APY ↓ または TVL ↓ でソート。
 - **ページの既存ウォレットを再利用** — 二度目の connect フローは不要。MetaMask、Rabby、Frame、Coinbase Wallet ほか、EIP-6963 に準拠する任意の injected ウォレットで動作します。
 - **非標準 ERC-20 対応** — USDT のように `approve` が何も返さないトークンも素のまま動作。approve ABI を no outputs として宣言しているため、viem の simulation が `0x` で失敗しません。
@@ -60,9 +60,9 @@
 ## 仕組み
 
 - **コントラクト** — 読み書きは全て Morpho Blue のシングルトン `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb`(全サポートチェーンで CREATE2 により同一アドレス)。`idToMarketParams(id)` で URL の market id をオンチェーンパラメータに解決、`supply(params, assets, 0, onBehalf, "0x")` で入金、`position(id, user)` + `market(id)` で残高計算。
-- **Wallet bridge** — `world: "MAIN"` の content script が EIP-6963 discovery(+ 旧来の `window.ethereum` フォールバック)を実装し、EIP-1193 リクエストを `window.postMessage` で isolated content script にプロキシ。その上に viem の `WalletClient` を構築。秘密鍵は決して保持しません。
+- **Wallet mediation** — wallet request は isolated content script から extension service worker に送られます。worker が送信元と RPC method を検証してから、`MAIN` world で限定された EIP-6963 / `window.ethereum` request を実行します。ページ script は `window.postMessage` から wallet path を呼び出せず、秘密鍵も保持しません。
 - **データ** — `https://blue-api.morpho.org/graphql` への軽量 GraphQL で APY と USD を取得。Shares-to-assets の計算は `sharesMath.ts` にローカルで移植済み。
-- **UI** — React 19 を Shadow DOM 内にマウントし、スタイルが Morpho ページに漏れない(逆も然り)構成。SPA ナビゲーションは `history.pushState` / `replaceState` のパッチと、アニメーション由来の DOM 変動を無視するスロットル付き `MutationObserver` で捕捉。
+- **UI** — 独立した Dashboard widget は React 19 + Shadow DOM を使用し、market の Lend form は Morpho 標準 Borrow の design token と utility class を継承するため light DOM にマウントします。SPA navigation は `history.pushState` / `replaceState` の patch と、animation 由来の DOM 変動を無視する throttle 付き `MutationObserver` で捕捉します。
 
 ## サポートチェーン
 
@@ -108,11 +108,15 @@ pnpm build
 ## テスト
 
 ```bash
+# 完全な release gate: logic、build、live DOM probe、extension E2E、
+# screenshot、Chrome Web Store ZIP
+pnpm test:release
+
 # 本番サイトに対する DOM プローブ(アンカーとサンプルレイアウト JSON を取得)
 pnpm probe
 
 # End-to-end — ビルド済み拡張を読み込んだ Chromium を起動。Lend タブ、
-# dashboard マウント、ダークモード可読性、provider bridge、お気に入りの
+# dashboard マウント、ダークモード可読性、ウォレット分離、お気に入りの
 # スター + フィルタ、ツールバー popup(タブ、ソート、V1/V2 vault レンダリング、
 # chrome.storage キャッシュ)を検証
 pnpm test:e2e
@@ -128,22 +132,23 @@ pnpm exec playwright test tests/e2e/screenshots.spec.ts
 
 ```
 src/
+├── background.ts             # 送信元検証・allow-list 付き wallet RPC service
 ├── manifest.config.ts        # MV3 manifest 宣言
 ├── content/
 │   ├── main.ts               # ISOLATED world — SPA ルート監視 + マウント分配
 │   ├── mount.ts              # Shadow DOM ホスト + React root + テーマ同期
 │   ├── router.ts             # pushState/replaceState → locationchange イベント
 │   ├── marketIntegration.ts  # マーケットパネルへの Borrow | Lend タブ注入
-│   └── listsIntegration.ts   # /markets と /vaults のお気に入りスター + filter chip
+│   └── listsIntegration.ts   # /variable と /vaults のお気に入りスター + filter chip
 ├── lib/
 │   ├── morpho.ts             # viem public client + Morpho コントラクトヘルパー
 │   ├── morphoAbi.ts          # IMorpho + ERC20 + WETH9 ABI
 │   ├── sharesMath.ts         # SharesMathLib 移植(virtual shares/assets)
 │   ├── chains.ts             # Slug ↔ chain ID、wrapped-native、RPC フォールバック
 │   ├── url.ts                # ルートマッチャ(market / dashboard / list / other)
-│   ├── favorites.ts          # chrome.storage.local ベースのお気に入り + タブ間同期 + E2E ブリッジ
+│   ├── favorites.ts          # chrome.storage.local ベースのお気に入り + タブ間同期
 │   ├── graphql.ts            # blue-api クライアント(マーケット、V1/V2 vault、バッチ + SWR キャッシュ)
-│   └── pageProvider.ts       # bridge クライアント + viem WalletClient アダプタ
+│   └── pageProvider.ts       # service-worker RPC client + viem WalletClient adapter
 ├── ui/
 │   ├── MarketLendForm.tsx    # マーケットページの Supply / Withdraw フォーム(wrap トグル付)
 │   ├── DashboardSupplyCard.tsx
@@ -160,17 +165,15 @@ src/
 │   └── curatedMarkets.ts     # Prime 厳選リスト(19 マーケット、手動メンテ)
 public/
 ├── icons/                    # scripts/make-logo.py で生成(16/32/48/128)
-├── logo.svg                  # マスター SVG(Morpho 蝶 + enhancement バッジ)
-└── injected/
-    └── provider-bridge.js    # アプリコードとバンドルしない MAIN-world の素 JS bridge
+└── logo.svg                  # マスター SVG(Morpho 蝶 + enhancement バッジ)
 scripts/
 ├── make-logo.py              # morpho-base.svg から拡張アイコンを再生成
 └── morpho-base.svg           # 公式 Morpho 蝶(ソース)
 tests/
 ├── probe/                    # app.morpho.org に対する DOM スクレイプ
 └── e2e/
-    ├── extension.spec.ts     # Lend タブ、dashboard マウント、ダークモード、provider bridge
-    ├── favorites.spec.ts     # スター + フィルタ + 永続化(postMessage テストブリッジ経由)
+    ├── extension.spec.ts     # Lend タブ、dashboard マウント、ダークモード、ウォレット分離
+    ├── favorites.spec.ts     # スター + フィルタ + extension storage 永続化
     ├── popup.spec.ts         # ツールバー popup — タブ、ソート、V1/V2 vault、キャッシュ、リフレッシュ
     └── screenshots.spec.ts   # README / ストア用スクリーンショット(モックデータ)
 ```
@@ -178,9 +181,9 @@ tests/
 ## セキュリティ
 
 - コントラクト状態は public RPC で読み取り(viem により 1 チェーンあたり 4 provider のフォールバック)。書き込みはユーザーのウォレット経由 — 拡張は秘密鍵を持たず、要求もしません。
-- 全ての書き込みは `writeContract` 前に `simulateContract` するため、revert はウォレット署名前に読める形で表面化します。
+- Morpho、approve、unwrap の書き込みは wallet prompt 前に simulate します。native wrap は直接送信し、各 receipt の成功を確認してから次へ進みます。
 - 全額引き出しは利息累積時の精度 revert を避けるため shares で、部分引き出しは 0.01% 許容で assets を使用します。
-- Host permissions は `https://app.morpho.org/*` のみ。Chrome API は `chrome.storage.local`(お気に入り + popup データキャッシュ)のみ使用。ユーザー設定の RPC、`blue-api.morpho.org`、Morpho のトークンロゴ CDN(`cdn.morpho.org`)以外にデータは送られません。
+- Host permissions は `https://app.morpho.org/*` のみ。`storage` はお気に入りと cache を local 保存し、`scripting` は sender 検証済み・allow-list 済みの wallet RPC だけを実行します。設定済み RPC、`blue-api.morpho.org`、Morpho token-logo CDN 以外へデータを送りません。
 
 ## 既知の制約
 
